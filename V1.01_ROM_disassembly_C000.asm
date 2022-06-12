@@ -76,9 +76,13 @@
     out     ($b2),a                         ;[c0a0]
     out     ($da),a                         ;[c0a2]
     jp      $0080                           ;[c0a4]
+
+    ; Current idle loop
+    ; At the moment, the PC hangs in this loop, reading 0x44 from $b3 IO
     in      a,($b3)                         ;[c0a7]
     bit     0,a                             ;[c0a9]
     jr      z,$c0a7                         ;[c0ab]
+
     in      a,($b2)                         ;[c0ad]
     ld      b,a                             ;[c0af]
     bit     7,a                             ;[c0b0]
