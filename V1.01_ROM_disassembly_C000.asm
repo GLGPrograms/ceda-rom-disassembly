@@ -98,10 +98,10 @@
 
     ; SUBROUTINE C0C2
     im      2                               ;[c0c2] set interrupt mode 2
-    call    $c0d1                           ;[c0c4] initialize timer
-    call    $c43f                           ;[c0c7]
-    call    $c108                           ;[c0ca]
-    call    $c88d                           ;[c0cd]
+    call    $c0d1                           ;[c0c4] initialize timer ($e0)
+    call    $c43f                           ;[c0c7] setup $c0 peripheral?
+    call    $c108                           ;[c0ca] setup $b0 peripheral?
+    call    $c88d                           ;[c0cd] setup $a0/$80 peripheral?
     ret                                     ;[c0d0]
 
     ; SUBROUTINE C0D1; initialize timer (base ioaddr(0xE0))
