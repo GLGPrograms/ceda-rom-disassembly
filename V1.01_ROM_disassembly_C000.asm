@@ -42,13 +42,13 @@
     jr      z,$c050                         ;[c054]
     in      a,($b2)                         ;[c056]
     out     ($da),a                         ;[c058]
-    ld      c,$56                           ;[c05a]
+    ld      c,$56                           ;[c05a] V
     call    $c45e                           ;[c05c]
-    ld      hl,$cffc                        ;[c05f]
+    ld      hl,$cffc                        ;[c05f] "Splash screen" string pointer
     ld      b,$04                           ;[c062]
     ld      c,(hl)                          ;[c064]
     inc     hl                              ;[c065]
-    call    $c45e                           ;[c066]
+    call    $c45e                           ;[c066] some sort of putchar to display char in c
     djnz    $c064                           ;[c069]
     call    $c0a7                           ;[c06b]
     ld      a,b                             ;[c06e]
@@ -607,6 +607,8 @@
 
     ; STATIC DATA for C43F
     ;[c45c] 6f 1b
+
+    ; SUBROUTINE C45E
     push    af                              ;[c45e] f5
     push    bc                              ;[c45f] c5
     push    de                              ;[c460] d5
@@ -2564,9 +2566,14 @@
     nop                                     ;[cff9] 00
     nop                                     ;[cffa] 00
     nop                                     ;[cffb] 00
-    ld      sp,$302e                        ;[cffc] 31 2e 30
-    ld      sp,$30c3                        ;[cfff] 31 c3 30
-    ret     nz                              ;[d002] c0
+    
+    ; "Splash screen" string
+    ; [cffc] 31 2e 30 31    ; 1.01
+    
+    
+    ;; Here it begins a replica of the previous data
+    jp      $c030                           ;[d000] reset vector
+    jp      $c027                           ;[d000] c3 27 c0
     jp      $c027                           ;[d003] c3 27 c0
     jp      $c027                           ;[d006] c3 27 c0
     jp      $c45e                           ;[d009] c3 5e c4
