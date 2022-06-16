@@ -980,6 +980,7 @@
     ld      h,a                             ;[c71a] 67
     ret                                     ;[c71b] c9
 
+    ; SUBROUTINE C71C - CRTC TODO
     ld      a,h                             ;[c71c] 7c
     and     $07                             ;[c71d] e6 07
     ld      h,a                             ;[c71f] 67
@@ -1027,6 +1028,7 @@
     jr      z,$c75d                         ;[c761] 28 fa
     ret                                     ;[c763] c9
 
+    ; SUBROUTINE C764 - CRTC TODO
     ld      bc,$0780                        ;[c764] 01 80 07
     push    ix                              ;[c767] dd e5
     pop     hl                              ;[c769] e1
@@ -1193,21 +1195,24 @@
     pop     bc                              ;[c863] c1
     ret                                     ;[c864] c9
 
-    ld      h,e                             ;[c865] 63
-    ld      d,b                             ;[c866] 50
-    ld      d,h                             ;[c867] 54
-    xor     d                               ;[c868] aa
-    add     hl,de                           ;[c869] 19
-    ld      b,$19                           ;[c86a] 06 19
-    add     hl,de                           ;[c86c] 19
-    nop                                     ;[c86d] 00
-    dec     c                               ;[c86e] 0d
-    dec     c                               ;[c86f] 0d
-    dec     c                               ;[c870] 0d
-    nop                                     ;[c871] 00
-    nop                                     ;[c872] 00
-    nop                                     ;[c873] 00
-    nop                                     ;[c874] 00
+    ; CRTC Configuration Table
+    ;[c865] 63  ; R0  Horiz tot ch
+    ;[c866] 50  ; R1  Horiz disp ch
+    ;[c867] 54  ; R2  Horiz sync pulse pos
+    ;[c868] aa  ; R3  Horiz sync pulse len
+    ;[c869] 19  ; R4  Vert tot ch
+    ;[c86a] 06  ; R5  Total raster adjust
+    ;[c86b] 19  ; R6  Vert disp ch
+    ;[c86c] 19  ; R7  Vert sync pulse pos
+    ;[c86d] 00  ; R8  Interlaced mode
+    ;[c86e] 0d  ; R9  Maximum raster
+    ;[c86f] 0d  ; R10 Cursor start raster
+    ;[c870] 0d  ; R11 Cursor end raster
+    ;[c871] 00  ; R12 Start address HI
+    ;[c872] 00  ; R13 Start address LO
+    ;[c873] 00  ; R14 Cursor HI
+    ;[c874] 00  ; R15 Cursor LO
+
     ld      a,($ffd1)                       ;[c875] 3a d1 ff
     set     3,a                             ;[c878] cb df
     ld      ($ffd1),a                       ;[c87a] 32 d1 ff
@@ -1222,14 +1227,17 @@
     xor     a                               ;[c88b] af
     ret                                     ;[c88c] c9
 
-    ld      hl,$c865                        ;[c88d] 21 65 c8
-    ld      b,$10                           ;[c890] 06 10
-    ld      c,$a1                           ;[c892] 0e a1
-    xor     a                               ;[c894] af
-    out     ($a0),a                         ;[c895] d3 a0
-    inc     a                               ;[c897] 3c
-    outi                                    ;[c898] ed a3
-    jr      nz,$c895                        ;[c89a] 20 f9
+    ; SUBROUTINE C88D - CRTC initialization
+    ld      hl,$c865                        ;[c88d] CRTC configuration table addr
+    ld      b,$10                           ;[c890] CRTC counter, $10 = # of registers
+    ld      c,$a1                           ;[c892] address CRTC with RS=1 (data)
+    xor     a                               ;[c894] clear a
+    out     ($a0),a                         ;[c895] set CRTC internal register address to A (RS=0)
+    inc     a                               ;[c897] move to next address
+    ; OUTI: outputs (HL++) to port in C, then decrements B and sets Z if B=0
+    outi                                    ;[c898] output data in HL to CRTC register
+    jr      nz,$c895                        ;[c89a] loop while B!=0
+    ;
     ld      ix,$0000                        ;[c89c] dd 21 00 00
     call    $c764                           ;[c8a0] cd 64 c7
     call    $c8b6                           ;[c8a3] cd b6 c8
@@ -1241,11 +1249,12 @@
     xor     a                               ;[c8b4] af
     ret                                     ;[c8b5] c9
 
-    ld      a,$06                           ;[c8b6] 3e 06
-    out     ($a0),a                         ;[c8b8] d3 a0
-    ld      a,$18                           ;[c8ba] 3e 18
-    out     ($a1),a                         ;[c8bc] d3 a1
-    ret                                     ;[c8be] c9
+    ; SUBROUTINE C8B6 - configure CRTC vertical displayed characters
+    ld      a,$06                           ;[c8b6]
+    out     ($a0),a                         ;[c8b8] Set R6 address
+    ld      a,$18                           ;[c8ba]
+    out     ($a1),a                         ;[c8bc] Put 24 character lines
+    ret                                     ;[c8be]
 
     xor     a                               ;[c8bf] af
     ld      ($ffce),a                       ;[c8c0] 32 ce ff
