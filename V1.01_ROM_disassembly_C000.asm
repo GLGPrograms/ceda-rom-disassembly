@@ -15,11 +15,12 @@ _main:
     jp      $c174                           ;[c01e]
     jp      $cde2                           ;[c021]
     jp      $cdf4                           ;[c024]
+label_c027:
     di                                      ;[c027]
     ld      a,$10                           ;[c028]
     out     ($b1),a                         ;[c02a]
     out     ($b3),a                         ;[c02c]
-    jr      $c040                           ;[c02e]
+    jr      label_c040                      ;[c02e]
 
     ; main entrypoint, after reset
     ld      a,$89                           ;[c030] ???
@@ -30,20 +31,23 @@ _main:
 
     ; delay, measured oscilloscope 208 ms
     ld      h,$7d                           ;[c039] hl = $7d
+label_c03b:
     dec     hl                              ;[c03b]
     ld      a,h                             ;[c03c]
     or      l                               ;[c03d] check for hl == 0
-    jr      nz,$c03b                        ;[c03e]
+    jr      nz,label_c03b                   ;[c03e]
 
+label_c040:
     ld      sp,$0080                        ;[c040] setup stack pointer
     call    $c0c2                           ;[c043]
     call    $c6af                           ;[c046]
     call    $c14e                           ;[c049]
     ld      a,$12                           ;[c04c]
     out     ($b2),a                         ;[c04e]
+label_c050:
     in      a,($b3)                         ;[c050]
     bit     0,a                             ;[c052]
-    jr      z,$c050                         ;[c054]
+    jr      z,label_c050                    ;[c054]
     in      a,($b2)                         ;[c056]
     out     ($da),a                         ;[c058]
     ld      c,$56                           ;[c05a] hardcoded 'V' for splash screen
@@ -55,28 +59,31 @@ label_c064:
     inc     hl                              ;[c065]
     call    $c45e                           ;[c066] putchar()
     djnz    label_c064                      ;[c069]
+label_c06b:
     call    $c0a7                           ;[c06b]
     ld      a,b                             ;[c06e]
     cp      $4d                             ;[c06f]
-    jr      z,$c088                         ;[c071]
+    jr      z,label_c088                    ;[c071]
     cp      $5c                             ;[c073]
-    jr      nz,$c06b                        ;[c075]
+    jr      nz,label_c06b                   ;[c075]
     ld      a,($8000)                       ;[c077]
     cpl                                     ;[c07a]
     ld      ($8000),a                       ;[c07b]
     ld      a,($8000)                       ;[c07e]
     cp      $c3                             ;[c081]
-    jr      nz,$c027                        ;[c083]
+    jr      nz,label_c027                   ;[c083]
     jp      $8000                           ;[c085]
+label_c088:
     ld      de,$0000                        ;[c088]
     ld      bc,$4000                        ;[c08b]
     ld      hl,$0080                        ;[c08e]
     ld      a,$01                           ;[c091]
     call    $c19d                           ;[c093]
     cp      $ff                             ;[c096]
-    jr      nz,$c09e                        ;[c098]
+    jr      nz,label_c09e                   ;[c098]
     out     ($da),a                         ;[c09a]
-    jr      $c088                           ;[c09c]
+    jr      label_c088                      ;[c09c]
+label_c09e:
     ld      a,$06                           ;[c09e]
     out     ($b2),a                         ;[c0a0]
     out     ($da),a                         ;[c0a2]
@@ -84,21 +91,23 @@ label_c064:
 
     ; Current idle loop
     ; At the moment, the PC hangs in this loop, reading 0x44 from $b3 IO
+label_c0a7:
     in      a,($b3)                         ;[c0a7]
     bit     0,a                             ;[c0a9]
-    jr      z,$c0a7                         ;[c0ab]
+    jr      z,label_c0a7                    ;[c0ab]
 
     in      a,($b2)                         ;[c0ad]
     ld      b,a                             ;[c0af]
     bit     7,a                             ;[c0b0]
-    jr      nz,$c0a7                        ;[c0b2]
+    jr      nz,label_c0a7                   ;[c0b2]
+label_c0b4:
     in      a,($b3)                         ;[c0b4]
     bit     0,a                             ;[c0b6]
-    jr      z,$c0b4                         ;[c0b8]
+    jr      z,label_c0b4                    ;[c0b8]
     in      a,($b2)                         ;[c0ba]
     ld      c,a                             ;[c0bc]
     bit     7,a                             ;[c0bd]
-    jr      z,$c0b4                         ;[c0bf]
+    jr      z,label_c0b4                    ;[c0bf]
     ret                                     ;[c0c1]
 
     ; SUBROUTINE C0C2
@@ -111,16 +120,18 @@ label_c064:
 
     ; SUBROUTINE C0D1; initialize timer (base ioaddr(0xE0))
     ld      hl,$c0f1                        ;[c0d1] ; initialization table base address
+label_c0d4:
     ld      a,(hl)                          ;[c0d4]
     inc     hl                              ;[c0d5]
     cp      $ff                             ;[c0d6] check for initialization table end
-    jr      z,$c0e1                         ;[c0d8] if table is ended, go on
+    jr      z,label_c0e1                    ;[c0d8] if table is ended, go on
     ld      c,a                             ;[c0da]
     ld      a,(hl)                          ;[c0db]
     inc     hl                              ;[c0dc]
     out     (c),a                           ;[c0dd]
-    jr      $c0d4                           ;[c0df] loop table
+    jr      label_c0d4                      ;[c0df] loop table
 
+label_c0e1:
     in      a,($d6)                         ;[c0e1] read index ("$06")
     and     $07                             ;[c0e3] clamp in interval [0;7]
     ld      d,$00                           ;[c0e5]
@@ -133,47 +144,67 @@ label_c064:
     ret                                     ;[c0f0]
 
     ; STATIC DATA for C0D1
-    ;[c0f1] e2 05 ; timer 2: configuration
-    ;[c0f3] e2 10 ; timer 2: time constant
-    ;[c0f5] e2 41 ; timer 2: select counter mode
-    ;[c0f7] e3 05 ; timer 3: configuration
-    ;[c0f9] e3 01 ; timer 3: time constant
-    ;[c0fb] e3 41 ; timer 3: select counter mode
-    ;[c0fd] e1 05 ; timer 1: configuration
-    ;[c0ff] ff
+    ; timer 2: configuration
+    BYTE $e2
+    BYTE $05
+    ; timer 2: time constant
+    BYTE $e2
+    BYTE $10
+    ; timer 2: select counter mode
+    BYTE $e2
+    BYTE $41
+    ; timer 3: configuration
+    BYTE $e3
+    BYTE $05
+    ; timer 3: time constant
+    BYTE $e3
+    BYTE $01
+    ; timer 3: select counter mode
+    BYTE $e3
+    BYTE $41
+    ; timer 1: configuration
+    BYTE $e1
+    BYTE $05
+    ; terminator
+    BYTE $ff
 
     ; probably another table
     ; len = 8, deduced from what happens at C0E3
     ; this could be some prescaler for timer1
-    ;[c100] ae
-    ;[c101] 40
-    ;[c102] 20
-    ;[c103] 10
-    ;[c104] 08
-    ;[c105] 04
-    ;[c106] 02
-    ;[c107] 01
+    BYTE $ae                                 ;[c100]
+    BYTE $40                                 ;[c101]
+    BYTE $20                                 ;[c102]
+    BYTE $10                                 ;[c103]
+    BYTE $08                                 ;[c104]
+    BYTE $04                                 ;[c105]
+    BYTE $02                                 ;[c106]
+    BYTE $01                                 ;[c107]
 
-    ;[c108] 21 34 ???
+    BYTE $21 ; ???
+    BYTE $34 ; ???
+
     pop     bc                              ;[c10a] c1
+label_c10b:
     ld      a,(hl)                          ;[c10b] 7e
     inc     hl                              ;[c10c] 23
     cp      $ff                             ;[c10d] fe ff
-    jr      z,$c119                         ;[c10f] 28 08
+    jr      z,label_c119                    ;[c10f] 28 08
     out     ($b1),a                         ;[c111] d3 b1
     ld      a,(hl)                          ;[c113] 7e
     out     ($b1),a                         ;[c114] d3 b1
     inc     hl                              ;[c116] 23
-    jr      $c10b                           ;[c117] 18 f2
+    jr      label_c10b                      ;[c117] 18 f2
+label_c119:
     ld      a,(hl)                          ;[c119] 7e
     cp      $ff                             ;[c11a] fe ff
-    jr      z,$c127                         ;[c11c] 28 09
+    jr      z,label_c127                    ;[c11c] 28 09
     out     ($b3),a                         ;[c11e] d3 b3
     inc     hl                              ;[c120] 23
     ld      a,(hl)                          ;[c121] 7e
     out     ($b3),a                         ;[c122] d3 b3
     inc     hl                              ;[c124] 23
-    jr      $c119                           ;[c125] 18 f2
+    jr      label_c119                      ;[c125] 18 f2
+label_c127:
     in      a,($b0)                         ;[c127] db b0
     in      a,($b2)                         ;[c129] db b2
     in      a,($b0)                         ;[c12b] db b0
@@ -238,13 +269,15 @@ label_c14a:
     ret                                     ;[c18e] c9
 
     ex      (sp),hl                         ;[c18f] e3
+label_c190:
     ld      a,(hl)                          ;[c190] 7e
     inc     hl                              ;[c191] 23
     or      a                               ;[c192] b7
-    jr      z,$c19b                         ;[c193] 28 06
+    jr      z,label_c19b                    ;[c193] 28 06
     ld      c,a                             ;[c195] 4f
     call    $c45e                           ;[c196] cd 5e c4
-    jr      $c190                           ;[c199] 18 f5
+    jr      label_c190                      ;[c199] 18 f5
+label_c19b:
     ex      (sp),hl                         ;[c19b] e3
     ret                                     ;[c19c] c9
 
@@ -272,15 +305,16 @@ label_c14a:
     ld      a,$ff                           ;[c1d2] 3e ff
     jp      $c1f0                           ;[c1d4] c3 f0 c1
     call    $c1f4                           ;[c1d7] cd f4 c1
-    jr      $c1f0                           ;[c1da] 18 14
+    jr      label_c1f0                      ;[c1da] 18 14
     call    $c24a                           ;[c1dc] cd 4a c2
-    jr      $c1f0                           ;[c1df] 18 0f
+    jr      label_c1f0                      ;[c1df] 18 0f
     call    $c3a9                           ;[c1e1] cd a9 c3
-    jr      $c1f0                           ;[c1e4] 18 0a
+    jr      label_c1f0                      ;[c1e4] 18 0a
     call    $c391                           ;[c1e6] cd 91 c3
-    jr      $c1f0                           ;[c1e9] 18 05
+    jr      label_c1f0                      ;[c1e9] 18 05
     call    $c2e3                           ;[c1eb] cd e3 c2
-    jr      $c1f0                           ;[c1ee] 18 00
+    jr      label_c1f0                      ;[c1ee] 18 00
+label_c1f0:
     pop     hl                              ;[c1f0] e1
     pop     de                              ;[c1f1] d1
     pop     bc                              ;[c1f2] c1
@@ -293,8 +327,9 @@ label_c14a:
     ld      c,$c5                           ;[c1fe] 0e c5
     ld      a,($ffb8)                       ;[c200] 3a b8 ff
     or      a                               ;[c203] b7
-    jr      nz,$c208                        ;[c204] 20 02
+    jr      nz,label_c208                   ;[c204] 20 02
     res     6,c                             ;[c206] cb b1
+label_c208:
     call    $c415                           ;[c208] cd 15 c4
     di                                      ;[c20b] f3
     call    $c34e                           ;[c20c] cd 4e c3
@@ -302,23 +337,25 @@ label_c14a:
     ld      c,$c1                           ;[c210] 0e c1
     ld      b,e                             ;[c212] 43
     ld      hl,($ffbd)                      ;[c213] 2a bd ff
+label_c216:
     in      a,($82)                         ;[c216] db 82
     bit     2,a                             ;[c218] cb 57
-    jr      z,$c216                         ;[c21a] 28 fa
+    jr      z,label_c216                    ;[c21a] 28 fa
     in      a,($c0)                         ;[c21c] db c0
     bit     5,a                             ;[c21e] cb 6f
-    jr      z,$c229                         ;[c220] 28 07
+    jr      z,label_c229                    ;[c220] 28 07
     outi                                    ;[c222] ed a3
-    jr      nz,$c216                        ;[c224] 20 f0
+    jr      nz,label_c216                   ;[c224] 20 f0
     dec     d                               ;[c226] 15
-    jr      nz,$c216                        ;[c227] 20 ed
+    jr      nz,label_c216                   ;[c227] 20 ed
+label_c229:
     out     ($dc),a                         ;[c229] d3 dc
     ei                                      ;[c22b] fb
     call    $c3f4                           ;[c22c] cd f4 c3
     ld      a,($ffc0)                       ;[c22f] 3a c0 ff
     and     $c0                             ;[c232] e6 c0
     cp      $40                             ;[c234] fe 40
-    jr      nz,$c248                        ;[c236] 20 10
+    jr      nz,label_c248                   ;[c236] 20 10
     call    $c2a0                           ;[c238] cd a0 c2
     ld      a,($ffbf)                       ;[c23b] 3a bf ff
     dec     a                               ;[c23e] 3d
@@ -327,6 +364,7 @@ label_c14a:
     ld      a,$ff                           ;[c245] 3e ff
     ret                                     ;[c247] c9
 
+label_c248:
     xor     a                               ;[c248] af
     ret                                     ;[c249] c9
 
@@ -337,8 +375,9 @@ label_c14a:
     ld      c,$c6                           ;[c254] 0e c6
     ld      a,($ffb8)                       ;[c256] 3a b8 ff
     or      a                               ;[c259] b7
-    jr      nz,$c25e                        ;[c25a] 20 02
+    jr      nz,label_c25e                   ;[c25a] 20 02
     res     6,c                             ;[c25c] cb b1
+label_c25e:
     call    $c415                           ;[c25e] cd 15 c4
     di                                      ;[c261] f3
     call    $c34e                           ;[c262] cd 4e c3
@@ -346,23 +385,25 @@ label_c14a:
     ld      c,$c1                           ;[c266] 0e c1
     ld      b,e                             ;[c268] 43
     ld      hl,($ffbd)                      ;[c269] 2a bd ff
+label_c26c:
     in      a,($82)                         ;[c26c] db 82
     bit     2,a                             ;[c26e] cb 57
-    jr      z,$c26c                         ;[c270] 28 fa
+    jr      z,label_c26c                    ;[c270] 28 fa
     in      a,($c0)                         ;[c272] db c0
     bit     5,a                             ;[c274] cb 6f
-    jr      z,$c27f                         ;[c276] 28 07
+    jr      z,label_c27f                    ;[c276] 28 07
     ini                                     ;[c278] ed a2
-    jr      nz,$c26c                        ;[c27a] 20 f0
+    jr      nz,label_c26c                   ;[c27a] 20 f0
     dec     d                               ;[c27c] 15
-    jr      nz,$c26c                        ;[c27d] 20 ed
+    jr      nz,label_c26c                   ;[c27d] 20 ed
+label_c27f:
     out     ($dc),a                         ;[c27f] d3 dc
     ei                                      ;[c281] fb
     call    $c3f4                           ;[c282] cd f4 c3
     ld      a,($ffc0)                       ;[c285] 3a c0 ff
     and     $c0                             ;[c288] e6 c0
     cp      $40                             ;[c28a] fe 40
-    jr      nz,$c29e                        ;[c28c] 20 10
+    jr      nz,label_c29e                   ;[c28c] 20 10
     call    $c2a0                           ;[c28e] cd a0 c2
     ld      a,($ffbf)                       ;[c291] 3a bf ff
     dec     a                               ;[c294] 3d
@@ -371,46 +412,52 @@ label_c14a:
     ld      a,$ff                           ;[c29b] 3e ff
     ret                                     ;[c29d] c9
 
+label_c29e:
     xor     a                               ;[c29e] af
     ret                                     ;[c29f] c9
 
     ld      a,($ffc2)                       ;[c2a0] 3a c2 ff
     bit     4,a                             ;[c2a3] cb 67
-    jr      z,$c2ab                         ;[c2a5] 28 04
+    jr      z,label_c2ab                    ;[c2a5] 28 04
     call    $c391                           ;[c2a7] cd 91 c3
     ret                                     ;[c2aa] c9
 
+label_c2ab:
     ld      a,($ffc1)                       ;[c2ab] 3a c1 ff
     bit     0,a                             ;[c2ae] cb 47
-    jr      z,$c2b6                         ;[c2b0] 28 04
+    jr      z,label_c2b6                    ;[c2b0] 28 04
     call    $c391                           ;[c2b2] cd 91 c3
     ret                                     ;[c2b5] c9
 
+label_c2b6:
     ret                                     ;[c2b6] c9
 
     ld      e,$00                           ;[c2b7] 1e 00
     ld      a,($ffb8)                       ;[c2b9] 3a b8 ff
     cp      $03                             ;[c2bc] fe 03
-    jr      nz,$c2d4                        ;[c2be] 20 14
+    jr      nz,label_c2d4                   ;[c2be] 20 14
     ld      d,$04                           ;[c2c0] 16 04
     ld      a,($ffbb)                       ;[c2c2] 3a bb ff
     bit     7,a                             ;[c2c5] cb 7f
-    jr      z,$c2e2                         ;[c2c7] 28 19
+    jr      z,label_c2e2                    ;[c2c7] 28 19
     ld      a,($ffba)                       ;[c2c9] 3a ba ff
     and     $0f                             ;[c2cc] e6 0f
     rlca                                    ;[c2ce] 07
     rlca                                    ;[c2cf] 07
     add     d                               ;[c2d0] 82
     ld      d,a                             ;[c2d1] 57
-    jr      $c2e2                           ;[c2d2] 18 0e
+    jr      label_c2e2                      ;[c2d2] 18 0e
+label_c2d4:
     or      a                               ;[c2d4] b7
-    jr      nz,$c2d9                        ;[c2d5] 20 02
+    jr      nz,label_c2d9                   ;[c2d5] 20 02
     ld      e,$80                           ;[c2d7] 1e 80
+label_c2d9:
     ld      a,($ffba)                       ;[c2d9] 3a ba ff
     and     $0f                             ;[c2dc] e6 0f
     ld      d,$01                           ;[c2de] 16 01
     add     d                               ;[c2e0] 82
     ld      d,a                             ;[c2e1] 57
+label_c2e2:
     ret                                     ;[c2e2] c9
 
     call    $c3a9                           ;[c2e3] cd a9 c3
@@ -419,8 +466,9 @@ label_c14a:
     ld      b,$14                           ;[c2e9] 06 14
     ld      a,($ffb8)                       ;[c2eb] 3a b8 ff
     cp      $03                             ;[c2ee] fe 03
-    jr      z,$c2f4                         ;[c2f0] 28 02
+    jr      z,label_c2f4                    ;[c2f0] 28 02
     ld      b,$40                           ;[c2f2] 06 40
+label_c2f4:
     push    bc                              ;[c2f4] c5
     call    $c41c                           ;[c2f5] cd 1c c4
     ld      c,$4d                           ;[c2f8] 0e 4d
@@ -433,8 +481,9 @@ label_c14a:
     ld      c,$05                           ;[c30b] 0e 05
     ld      a,($ffb8)                       ;[c30d] 3a b8 ff
     cp      $03                             ;[c310] fe 03
-    jr      z,$c316                         ;[c312] 28 02
+    jr      z,label_c316                    ;[c312] 28 02
     ld      c,$10                           ;[c314] 0e 10
+label_c316:
     call    $c415                           ;[c316] cd 15 c4
     ld      c,$28                           ;[c319] 0e 28
     call    $c415                           ;[c31b] cd 15 c4
@@ -444,24 +493,27 @@ label_c14a:
     pop     bc                              ;[c324] c1
     ld      c,$c1                           ;[c325] 0e c1
     ld      hl,($ffbd)                      ;[c327] 2a bd ff
+label_c32a:
     in      a,($82)                         ;[c32a] db 82
     bit     2,a                             ;[c32c] cb 57
-    jr      z,$c32a                         ;[c32e] 28 fa
+    jr      z,label_c32a                    ;[c32e] 28 fa
     in      a,($c0)                         ;[c330] db c0
     bit     5,a                             ;[c332] cb 6f
-    jr      z,$c33a                         ;[c334] 28 04
+    jr      z,label_c33a                    ;[c334] 28 04
     outi                                    ;[c336] ed a3
-    jr      nz,$c32a                        ;[c338] 20 f0
+    jr      nz,label_c32a                   ;[c338] 20 f0
+label_c33a:
     out     ($dc),a                         ;[c33a] d3 dc
     ei                                      ;[c33c] fb
     call    $c3f4                           ;[c33d] cd f4 c3
     ld      a,($ffc0)                       ;[c340] 3a c0 ff
     and     $c0                             ;[c343] e6 c0
     cp      $40                             ;[c345] fe 40
-    jr      nz,$c34c                        ;[c347] 20 03
+    jr      nz,label_c34c                   ;[c347] 20 03
     ld      a,$ff                           ;[c349] 3e ff
     ret                                     ;[c34b] c9
 
+label_c34c:
     xor     a                               ;[c34c] af
     ret                                     ;[c34d] c9
 
@@ -487,8 +539,9 @@ label_c14a:
     ld      c,$05                           ;[c378] 0e 05
     ld      a,($ffb8)                       ;[c37a] 3a b8 ff
     cp      $03                             ;[c37d] fe 03
-    jr      z,$c383                         ;[c37f] 28 02
+    jr      z,label_c383                    ;[c37f] 28 02
     ld      c,$10                           ;[c381] 0e 10
+label_c383:
     call    $c415                           ;[c383] cd 15 c4
     ld      c,$28                           ;[c386] 0e 28
     call    $c415                           ;[c388] cd 15 c4
@@ -496,6 +549,7 @@ label_c14a:
     call    $c415                           ;[c38d] cd 15 c4
     ret                                     ;[c390] c9
 
+label_c391:
     call    $c41c                           ;[c391] cd 1c c4
     ld      c,$07                           ;[c394] 0e 07
     call    $c415                           ;[c396] cd 15 c4
@@ -503,7 +557,7 @@ label_c14a:
     res     2,c                             ;[c39d] cb 91
     call    $c415                           ;[c39f] cd 15 c4
     call    $c3d2                           ;[c3a2] cd d2 c3
-    jr      z,$c391                         ;[c3a5] 28 ea
+    jr      z,label_c391                    ;[c3a5] 28 ea
     xor     a                               ;[c3a7] af
     ret                                     ;[c3a8] c9
 
@@ -519,9 +573,10 @@ label_c14a:
     ld      c,d                             ;[c3c1] 4a
     call    $c415                           ;[c3c2] cd 15 c4
     call    $c3d2                           ;[c3c5] cd d2 c3
-    jr      nz,$c3d0                        ;[c3c8] 20 06
+    jr      nz,label_c3d0                   ;[c3c8] 20 06
     call    $c391                           ;[c3ca] cd 91 c3
     jp      $c3a9                           ;[c3cd] c3 a9 c3
+label_c3d0:
     xor     a                               ;[c3d0] af
     ret                                     ;[c3d1] c9
 
@@ -545,25 +600,28 @@ label_c14a:
     ld      hl,$ffc0                        ;[c3f4] 21 c0 ff
     ld      b,$07                           ;[c3f7] 06 07
     ld      c,$c1                           ;[c3f9] 0e c1
+label_c3fb:
     call    $c40c                           ;[c3fb] cd 0c c4
     ini                                     ;[c3fe] ed a2
-    jr      nz,$c3fb                        ;[c400] 20 f9
+    jr      nz,label_c3fb                   ;[c400] 20 f9
     ret                                     ;[c402] c9
 
     ; SUBROUTINE C403 ; wait for ioaddr(0xc0) to become "0b10xxxxxx"
+label_c403:
     in      a,($c0)                         ;[c403]
     rlca                                    ;[c405]
-    jr      nc,$c403                        ;[c406] while (bit7 == 0), try again
+    jr      nc,label_c403                   ;[c406] while (bit7 == 0), try again
     rlca                                    ;[c408]
-    jr      c,$c403                         ;[c409] while (bit7 == 1) && (bit6 == 1), try again
+    jr      c,label_c403                    ;[c409] while (bit7 == 1) && (bit6 == 1), try again
     ret                                     ;[c40b]
 
     ; SUBROUTINE C40C ; wait for ioaddr(0xc0) to become "0b11xxxxxx"
+label_c40c:
     in      a,($c0)                         ;[c40c]
     rlca                                    ;[c40e]
-    jr      nc,$c40c                        ;[c40f] while (bit7 == 0), try again
+    jr      nc,label_c40c                   ;[c40f] while (bit7 == 0), try again
     rlca                                    ;[c411]
-    jr      nc,$c40c                        ;[c412] while (bit7 == 1) && (bit6 == 0), try again
+    jr      nc,label_c40c                   ;[c412] while (bit7 == 1) && (bit6 == 0), try again
     ret                                     ;[c414]
 
     ; SUBROUTINE C415
@@ -573,19 +631,22 @@ label_c14a:
     ret                                     ;[c41b]
 
     ; SUBROUTINE C41C ; while( ioaddr(0xc0).4 == 1 ), wait
+label_c41c:
     in      a,($c0)                         ;[c41c]
     bit     4,a                             ;[c41e]
-    jr      nz,$c41c                        ;[c420]
+    jr      nz,label_c41c                   ;[c420]
     ret                                     ;[c422]
 
     ld      b,$01                           ;[c423] 06 01
     ld      a,c                             ;[c425] 79
     and     $03                             ;[c426] e6 03
     or      a                               ;[c428] b7
-    jr      z,$c430                         ;[c429] 28 05
+    jr      z,label_c430                    ;[c429] 28 05
+label_c42b:
     rlc     b                               ;[c42b] cb 00
     dec     a                               ;[c42d] 3d
-    jr      nz,$c42b                        ;[c42e] 20 fb
+    jr      nz,label_c42b                   ;[c42e] 20 fb
+label_c430:
     ld      a,($ffc7)                       ;[c430] 3a c7 ff
     ld      c,a                             ;[c433] 4f
     and     b                               ;[c434] a0
@@ -615,7 +676,8 @@ label_c14a:
     ret                                     ;[c45b]
 
     ; STATIC DATA for C43F
-    ;[c45c] 6f 1b
+    BYTE $6f
+    BYTE $1b
 
     ; SUBROUTINE C45E ; putchar()
     push    af                              ;[c45e] save all registers
@@ -627,39 +689,43 @@ label_c14a:
     call    $c69a                           ;[c466]
     ld      a,($ffd8)                       ;[c469]
     or      a                               ;[c46c] a == 0 ?
-    jr      nz,$c9e3                        ;[c46d]
+    jp      nz,$c9e3                        ;[c46d]
     ld      a,($ffcc)                       ;[c470]
     cp      $ff                             ;[c473]
-    jr      z,$c6a3                         ;[c475]
+    jp      z,$c6a3                         ;[c475]
     or      a                               ;[c478]
-    jr      nz,$c4be                        ;[c479]
+    jp      nz,label_c4be                   ;[c479]
     ld      a,c                             ;[c47c]
     cp      $1b                             ;[c47d]
-    jr      z,$c4b6                         ;[c47f]
+    jr      z,label_c4b6                    ;[c47f]
     cp      $20                             ;[c481]
-    jr      nc,$c4be                        ;[c483]
+    jp      nc,label_c4be                   ;[c483]
     cp      $0d                             ;[c486]
-    jr      z,$c524                         ;[c488]
+    jp      z,label_c524                    ;[c488]
     cp      $0a                             ;[c48b]
-    jr      z,$c532                         ;[c48d]
+    jp      z,label_c532                    ;[c48d]
     cp      $0b                             ;[c490]
-    jr      z,$c558                         ;[c492]
+    jp      z,label_c558                    ;[c492]
     cp      $0c                             ;[c495]
-    jr      z,$c56f                         ;[c497]
+    jp      z,label_c56f                    ;[c497]
     cp      $08                             ;[c49a]
-    jr      z,$c59b                         ;[c49c]
+    jp      z,label_c59b                    ;[c49c]
+
+
     cp      $1e                             ;[c49f]
-    jr      z,$c5db                         ;[c4a1]
+    jp      z,label_c5db                    ;[c4a1]
     cp      $1a                             ;[c4a4]
-    jr      z,$c5ee                         ;[c4a6]
+    jp      z,label_c5ee                    ;[c4a6]
     cp      $07                             ;[c4a9]
     call    z,$c5f4                         ;[c4ab]
     cp      $00                             ;[c4ae]
-    jr      z,$c6a3                         ;[c4b0]
-    jr      $c4be                           ;[c4b3]
+    jp      z,label_c6a3                    ;[c4b0]
+    jp      label_c4be                      ;[c4b3]
+label_c4b6:
     ld      a,$01                           ;[c4b6]
     ld      ($ffd8),a                       ;[c4b8]
-    jr      $c6a3                           ;[c4bb]
+    jp      label_c6a3                      ;[c4bb]
+label_c4be:
     push    iy                              ;[c4be]
     pop     hl                              ;[c4c0]
     call    $c715                           ;[c4c1]
@@ -673,30 +739,34 @@ label_c14a:
     ld      (hl),a                          ;[c4d1]
     call    $c79e                           ;[c4d2]
     call    $c5f8                           ;[c4d5]
-    jr      c,$c4e0                         ;[c4d8]
+    jr      c,label_c4e0                    ;[c4d8]
     call    $c613                           ;[c4da]
-    jr      $c6a3                           ;[c4dd]
+    jp      label_c6a3                      ;[c4dd]
+label_c4e0:
     ld      a,($ffcb)                       ;[c4e0]
     ld      b,a                             ;[c4e3]
     ld      a,($ffcd)                       ;[c4e4]
     cp      b                               ;[c4e7]
-    jr      z,$c501                         ;[c4e8]
+    jr      z,label_c501                    ;[c4e8]
     inc     b                               ;[c4ea]
     ld      a,b                             ;[c4eb]
     ld      ($ffcb),a                       ;[c4ec]
     ld      a,($ffc9)                       ;[c4ef]
     or      a                               ;[c4f2]
-    jr      nz,$c4fb                        ;[c4f3]
+    jr      nz,label_c4fb                   ;[c4f3]
     call    $c613                           ;[c4f5]
-    jr      $c6a3                           ;[c4f8]
+    jp      label_c6a3                      ;[c4f8]
+label_c4fb:
     call    $c620                           ;[c4fb]
-    jr      $c6a3                           ;[c4fe]
+    jp      label_c6a3                      ;[c4fe]
+label_c501:
     ld      a,($ffc9)                       ;[c501]
     or      a                               ;[c504]
-    jr      nz,$c510                        ;[c505]
+    jr      nz,label_c510                   ;[c505]
     call    $c613                           ;[c507]
     call    $c62e                           ;[c50a]
-    jr      $c6a3                           ;[c50d]
+    jp      label_c6a3                      ;[c50d]
+label_c510:
     ld      a,($ffcd)                       ;[c510]
     ld      b,a                             ;[c513]
     ld      a,($ffd0)                       ;[c514]
@@ -704,48 +774,55 @@ label_c14a:
     call    $c6f1                           ;[c518]
     call    $c71c                           ;[c51b]
     call    $c62e                           ;[c51e]
-    jr      $c6a3                           ;[c521]
+    jp      label_c6a3                      ;[c521]
+label_c524:
     ld      a,($ffd0)                       ;[c524]
     ld      ($ffca),a                       ;[c527]
     ld      c,a                             ;[c52a]
     ld      a,($ffcb)                       ;[c52b]
     ld      b,a                             ;[c52e]
-    jr      $c5e5                           ;[c52f]
+    jp      label_c5e5                      ;[c52f]
+label_c532:
     ld      a,($ffcb)                       ;[c532]
     ld      b,a                             ;[c535]
     ld      a,($ffcd)                       ;[c536]
     cp      b                               ;[c539]
-    jr      z,$c54b                         ;[c53a]
+    jr      z,label_c54b                    ;[c53a]
     inc     b                               ;[c53c]
     ld      a,b                             ;[c53d]
     ld      ($ffcb),a                       ;[c53e]
+label_c541:
     push    iy                              ;[c541]
     pop     hl                              ;[c543]
     ld      de,$0050                        ;[c544]
     add     hl,de                           ;[c547]
-    jr      $c5e8                           ;[c548]
+    jp      label_c5e8                      ;[c548]
+label_c54b:
     call    $c62e                           ;[c54b]
     ld      a,($ffcb)                       ;[c54e]
     ld      b,a                             ;[c551]
     ld      a,($ffca)                       ;[c552]
     ld      c,a                             ;[c555]
-    jr      $c541                           ;[c556]
+    jr      label_c541                      ;[c556]
+label_c558:
     ld      a,($ffcb)                       ;[c558]
     ld      b,a                             ;[c55b]
     ld      a,($ffce)                       ;[c55c]
     cp      b                               ;[c55f]
-    jr      z,$c6a3                         ;[c560]
+    jp      z,label_c6a3                    ;[c560]
     dec     b                               ;[c563]
     ld      a,b                             ;[c564]
     ld      ($ffcb),a                       ;[c565]
     ld      a,($ffca)                       ;[c568]
     ld      c,a                             ;[c56b]
-    jr      $c5e5                           ;[c56c]
+    jp      label_c5e5                      ;[c56c]
+label_c56f:
     call    $c5f8                           ;[c56f]
     ld      a,($ffcb)                       ;[c572]
     ld      b,a                             ;[c575]
-    jr      c,$c57b                         ;[c576]
-    jr      $c5e5                           ;[c578]
+    jr      c,label_c57b                    ;[c576]
+    jp      label_c5e5                      ;[c578]
+label_c57b:
     ld      a,($ffd0)                       ;[c57b]
     ld      ($ffca),a                       ;[c57e]
     ld      c,a                             ;[c581]
@@ -753,36 +830,41 @@ label_c14a:
     ld      b,a                             ;[c585]
     ld      a,($ffcd)                       ;[c586]
     cp      b                               ;[c589]
-    jr      z,$c594                         ;[c58a]
+    jr      z,label_c594                    ;[c58a]
     inc     b                               ;[c58c]
     ld      a,b                             ;[c58d]
     ld      ($ffcb),a                       ;[c58e]
-    jr      $c5e5                           ;[c591]
+    jp      label_c5e5                      ;[c591]
+label_c594:
     push    bc                              ;[c594]
     call    $c62e                           ;[c595]
     pop     bc                              ;[c598]
-    jr      $c5e5                           ;[c599]
+    jr      label_c5e5                      ;[c599]
+label_c59b:
     ld      a,($ffca)                       ;[c59b]
     ld      c,a                             ;[c59e]
     ld      a,($ffd0)                       ;[c59f]
     cp      c                               ;[c5a2]
-    jr      z,$c5b8                         ;[c5a3]
+    jr      z,label_c5b8                    ;[c5a3]
     dec     c                               ;[c5a5]
     ld      a,($ffd1)                       ;[c5a6]
     bit     3,a                             ;[c5a9]
-    jr      z,$c5ae                         ;[c5ab]
+    jr      z,label_c5ae                    ;[c5ab]
     dec     c                               ;[c5ad]
+label_c5ae:
     ld      a,c                             ;[c5ae]
     ld      ($ffca),a                       ;[c5af]
     ld      a,($ffcb)                       ;[c5b2]
     ld      b,a                             ;[c5b5]
-    jr      $c5e5                           ;[c5b6]
+    jr      label_c5e5                      ;[c5b6]
+label_c5b8:
     ld      a,($ffcf)                       ;[c5b8]
     ld      b,a                             ;[c5bb]
     ld      a,($ffd1)                       ;[c5bc]
     bit     3,a                             ;[c5bf]
-    jr      z,$c5c4                         ;[c5c1]
+    jr      z,label_c5c4                    ;[c5c1]
     dec     b                               ;[c5c3]
+label_c5c4:
     ld      a,b                             ;[c5c4]
     ld      ($ffca),a                       ;[c5c5]
     ld      c,a                             ;[c5c8]
@@ -790,20 +872,24 @@ label_c14a:
     ld      b,a                             ;[c5cc]
     ld      a,($ffce)                       ;[c5cd]
     cp      b                               ;[c5d0]
-    jr      z,$c6a3                         ;[c5d1]
+    jp      z,label_c6a3                    ;[c5d1]
     dec     b                               ;[c5d4]
     ld      a,b                             ;[c5d5]
     ld      ($ffcb),a                       ;[c5d6]
-    jr      $c5e5                           ;[c5d9]
+    jr      label_c5e5                      ;[c5d9]
+label_c5db:
     xor     a                               ;[c5db]
     ld      ($ffcb),a                       ;[c5dc]
     ld      ($ffca),a                       ;[c5df]
     ld      bc,$0000                        ;[c5e2]
+label_c5e5:
     call    $c6f1                           ;[c5e5]
+label_c5e8:
     call    $c71c                           ;[c5e8]
-    jr      $c6a3                           ;[c5eb]
+    jp      label_c6a3                      ;[c5eb]
+label_c5ee:
     call    $c764                           ;[c5ee]
-    jr      $c6a3                           ;[c5f1]
+    jp      label_c6a3                      ;[c5f1]
     xor     a                               ;[c5f4]
     out     ($da),a                         ;[c5f5]
     ret                                     ;[c5f7]
@@ -813,21 +899,24 @@ label_c14a:
     inc     c                               ;[c5fc] 0c
     ld      a,($ffd1)                       ;[c5fd] 3a d1 ff
     bit     3,a                             ;[c600] cb 5f
-    jr      z,$c605                         ;[c602] 28 01
+    jr      z,label_c605                    ;[c602] 28 01
     inc     c                               ;[c604] 0c
+label_c605:
     ld      a,($ffcf)                       ;[c605] 3a cf ff
     cp      c                               ;[c608] b9
     ld      a,c                             ;[c609] 79
-    jr      nc,$c60f                        ;[c60a] 30 03
+    jr      nc,label_c60f                   ;[c60a] 30 03
     ld      a,($ffd0)                       ;[c60c] 3a d0 ff
+label_c60f:
     ld      ($ffca),a                       ;[c60f] 32 ca ff
     ret                                     ;[c612] c9
 
     inc     hl                              ;[c613] 23
     ld      a,($ffd1)                       ;[c614] 3a d1 ff
     bit     3,a                             ;[c617] cb 5f
-    jr      z,$c61c                         ;[c619] 28 01
+    jr      z,label_c61c                    ;[c619] 28 01
     inc     hl                              ;[c61b] 23
+label_c61c:
     call    $c71c                           ;[c61c] cd 1c c7
     ret                                     ;[c61f] c9
 
@@ -842,7 +931,7 @@ label_c14a:
 
     ld      a,($ffc9)                       ;[c62e] 3a c9 ff
     or      a                               ;[c631] b7
-    jr      nz,$c647                        ;[c632] 20 13
+    jr      nz,label_c647                   ;[c632] 20 13
     push    ix                              ;[c634] dd e5
     pop     hl                              ;[c636] e1
     ld      de,$0050                        ;[c637] 11 50 00
@@ -853,6 +942,7 @@ label_c14a:
     call    $c670                           ;[c643] cd 70 c6
     ret                                     ;[c646] c9
 
+label_c647:
     ld      a,($ffd0)                       ;[c647] 3a d0 ff
     ld      c,a                             ;[c64a] 4f
     ld      a,($ffce)                       ;[c64b] 3a ce ff
@@ -861,13 +951,15 @@ label_c14a:
     ld      d,a                             ;[c652] 57
     ld      a,($ffcd)                       ;[c653] 3a cd ff
     sub     d                               ;[c656] 92
-    jr      z,$c664                         ;[c657] 28 0b
+    jr      z,label_c664                    ;[c657] 28 0b
     ld      d,a                             ;[c659] 57
+label_c65a:
     inc     b                               ;[c65a] 04
     call    $c6f1                           ;[c65b] cd f1 c6
     call    $c7a7                           ;[c65e] cd a7 c7
     dec     d                               ;[c661] 15
-    jr      nz,$c65a                        ;[c662] 20 f6
+    jr      nz,label_c65a                   ;[c662] 20 f6
+label_c664:
     ld      a,($ffcd)                       ;[c664] 3a cd ff
     ld      d,a                             ;[c667] 57
     ld      a,($ffcf)                       ;[c668] 3a cf ff
@@ -904,6 +996,7 @@ label_c690:
     ld      iy,($ffd6)                      ;[c69e] fd 2a d6 ff
     ret                                     ;[c6a2] c9
 
+label_c6a3:
     call    $c6e8                           ;[c6a3] cd e8 c6
     pop     iy                              ;[c6a6] fd e1
     pop     ix                              ;[c6a8] dd e1
@@ -939,12 +1032,14 @@ label_c690:
     ld      d,a                             ;[c6cd] 57
     in      a,($d6)                         ;[c6ce] db d6
     bit     5,a                             ;[c6d0] cb 6f
-    jr      z,$c6d6                         ;[c6d2] 28 02
+    jr      z,label_c6d6                    ;[c6d2] 28 02
     ld      d,$03                           ;[c6d4] 16 03
+label_c6d6:
     bit     6,a                             ;[c6d6] cb 77
-    jr      z,$c6de                         ;[c6d8] 28 04
+    jr      z,label_c6de                    ;[c6d8] 28 04
     set     5,d                             ;[c6da] cb ea
     set     6,d                             ;[c6dc] cb f2
+label_c6de:
     ld      (hl),d                          ;[c6de] 72
     xor     a                               ;[c6df] af
     inc     hl                              ;[c6e0] 23
@@ -967,14 +1062,16 @@ label_c6e3:
     ld      de,$0050                        ;[c6f7] 11 50 00
     ld      a,b                             ;[c6fa] 78
     ld      b,$05                           ;[c6fb] 06 05
+label_c6fd:
     rra                                     ;[c6fd] 1f
-    jr      nc,$c701                        ;[c6fe] 30 01
+    jr      nc,label_c701                   ;[c6fe] 30 01
     add     hl,de                           ;[c700] 19
+label_c701:
     or      a                               ;[c701] b7
     rl      e                               ;[c702] cb 13
     rl      d                               ;[c704] cb 12
     dec     b                               ;[c706] 05
-    jr      nz,$c6fd                        ;[c707] 20 f4
+    jr      nz,label_c6fd                   ;[c707] 20 f4
     ld      d,$00                           ;[c709] 16 00
     ld      e,c                             ;[c70b] 59
     add     hl,de                           ;[c70c] 19
@@ -1000,11 +1097,12 @@ label_c6e3:
     ex      de,hl                           ;[c723] eb
     or      a                               ;[c724] b7
     sbc     hl,de                           ;[c725] ed 52
-    jr      c,$c730                         ;[c727] 38 07
-    jr      z,$c730                         ;[c729] 28 05
+    jr      c,label_c730                    ;[c727] 38 07
+    jr      z,label_c730                    ;[c729] 28 05
     ld      hl,$0800                        ;[c72b] 21 00 08
     add     hl,de                           ;[c72e] 19
     ex      de,hl                           ;[c72f] eb
+label_c730:
     ld      a,$0e                           ;[c730] 3e 0e
     out     ($a0),a                         ;[c732] d3 a0
     ld      a,d                             ;[c734] 7a
@@ -1034,9 +1132,10 @@ label_c6e3:
     ret                                     ;[c75a] c9
 
     in      a,($a0)                         ;[c75b] db a0
+label_c75d:
     in      a,($82)                         ;[c75d] db 82
     bit     1,a                             ;[c75f] cb 4f
-    jr      z,$c75d                         ;[c761] 28 fa
+    jr      z,label_c75d                    ;[c761] 28 fa
     ret                                     ;[c763] c9
 
     ld      bc,$0780                        ;[c764] 01 80 07
@@ -1044,6 +1143,7 @@ label_c6e3:
     pop     hl                              ;[c769] e1
     ld      de,$2000                        ;[c76a] 11 00 20
     call    $c715                           ;[c76d] cd 15 c7
+label_c770:
     ld      (hl),d                          ;[c770] 72
     in      a,($81)                         ;[c771] db 81
     set     7,a                             ;[c773] cb ff
@@ -1057,7 +1157,7 @@ label_c6e3:
     dec     bc                              ;[c782] 0b
     ld      a,b                             ;[c783] 78
     or      c                               ;[c784] b1
-    jr      nz,$c770                        ;[c785] 20 e9
+    jr      nz,label_c770                   ;[c785] 20 e9
     push    ix                              ;[c787] dd e5
     pop     hl                              ;[c789] e1
     call    $c71c                           ;[c78a] cd 1c c7
@@ -1126,14 +1226,15 @@ label_c7d8:
     call    z,$c715                         ;[c7e4] cc 15 c7
     djnz    label_c7d8                      ;[c7e7] 10 ef
     dec     c                               ;[c7e9] 0d
-    jr      z,$c7f6                         ;[c7ea] 28 0a
+    jr      z,label_c7f6                    ;[c7ea] 28 0a
     ld      a,c                             ;[c7ec] 79
     pop     hl                              ;[c7ed] e1
     pop     de                              ;[c7ee] d1
     pop     bc                              ;[c7ef] c1
     ld      c,a                             ;[c7f0] 4f
     call    $c795                           ;[c7f1] cd 95 c7
-    jr      $c7d8                           ;[c7f4] 18 e2
+    jr      label_c7d8                      ;[c7f4] 18 e2
+label_c7f6:
     call    $c79e                           ;[c7f6] cd 9e c7
     ret                                     ;[c7f9] c9
 
@@ -1153,7 +1254,9 @@ label_c7d8:
     sub     b                               ;[c80a] 90
     inc     a                               ;[c80b] 3c
     ld      d,a                             ;[c80c] 57
+label_c80d:
     call    $c6f1                           ;[c80d] cd f1 c6
+label_c810:
     call    $c715                           ;[c810] cd 15 c7
     ld      (hl),$20                        ;[c813] 36 20
     call    $c795                           ;[c815] cd 95 c7
@@ -1161,7 +1264,7 @@ label_c7d8:
     call    $c79e                           ;[c81a] cd 9e c7
     inc     hl                              ;[c81d] 23
     dec     e                               ;[c81e] 1d
-    jr      nz,$c810                        ;[c81f] 20 ef
+    jr      nz,label_c810                   ;[c81f] 20 ef
     inc     b                               ;[c821] 04
     ld      a,($ffd0)                       ;[c822] 3a d0 ff
     ld      c,a                             ;[c825] 4f
@@ -1170,22 +1273,24 @@ label_c7d8:
     inc     a                               ;[c82a] 3c
     ld      e,a                             ;[c82b] 5f
     dec     d                               ;[c82c] 15
-    jr      nz,$c80d                        ;[c82d] 20 de
+    jr      nz,label_c80d                   ;[c82d] 20 de
     ret                                     ;[c82f] c9
 
     ld      a,($ffcd)                       ;[c830] 3a cd ff
     ld      b,a                             ;[c833] 47
     ld      a,($ffce)                       ;[c834] 3a ce ff
     cp      b                               ;[c837] b8
-    jr      z,$c845                         ;[c838] 28 0b
+    jr      z,label_c845                    ;[c838] 28 0b
     ld      d,a                             ;[c83a] 57
     ld      a,b                             ;[c83b] 78
     sub     d                               ;[c83c] 92
     ld      d,a                             ;[c83d] 57
+label_c83e:
     dec     b                               ;[c83e] 05
     call    $c7fa                           ;[c83f] cd fa c7
     dec     d                               ;[c842] 15
-    jr      nz,$c83e                        ;[c843] 20 f9
+    jr      nz,label_c83e                   ;[c843] 20 f9
+label_c845:
     ld      a,($ffce)                       ;[c845] 3a ce ff
     ld      b,a                             ;[c848] 47
     ld      d,a                             ;[c849] 57
@@ -1227,11 +1332,12 @@ label_c7d8:
     ld      a,($ffca)                       ;[c87d] 3a ca ff
     ld      c,a                             ;[c880] 4f
     rra                                     ;[c881] 1f
-    jr      nc,$c88b                        ;[c882] 30 07
+    jr      nc,label_c88b                   ;[c882] 30 07
     inc     iy                              ;[c884] fd 23
     inc     c                               ;[c886] 0c
     ld      a,c                             ;[c887] 79
     ld      ($ffca),a                       ;[c888] 32 ca ff
+label_c88b:
     xor     a                               ;[c88b] af
     ret                                     ;[c88c] c9
 
@@ -1239,10 +1345,11 @@ label_c7d8:
     ld      b,$10                           ;[c890] 06 10
     ld      c,$a1                           ;[c892] 0e a1
     xor     a                               ;[c894] af
+label_c895:
     out     ($a0),a                         ;[c895] d3 a0
     inc     a                               ;[c897] 3c
     outi                                    ;[c898] ed a3
-    jr      nz,$c895                        ;[c89a] 20 f9
+    jr      nz,label_c895                   ;[c89a] 20 f9
     ld      ix,$0000                        ;[c89c] dd 21 00 00
     call    $c764                           ;[c8a0] cd 64 c7
     call    $c8b6                           ;[c8a3] cd b6 c8
@@ -1272,19 +1379,21 @@ label_c7d8:
     call    $c75b                           ;[c8d1] cd 5b c7
     xor     a                               ;[c8d4] af
     ld      c,$a1                           ;[c8d5] 0e a1
+label_c8d7:
     out     ($a0),a                         ;[c8d7] d3 a0
     inc     a                               ;[c8d9] 3c
     outi                                    ;[c8da] ed a3
-    jr      nz,$c8d7                        ;[c8dc] 20 f9
+    jr      nz,label_c8d7                   ;[c8dc] 20 f9
     ret                                     ;[c8de] c9
 
     ld      a,($ffd9)                       ;[c8df] 3a d9 ff
     or      a                               ;[c8e2] b7
-    jr      nz,$c8ea                        ;[c8e3] 20 05
+    jr      nz,label_c8ea                   ;[c8e3] 20 05
     inc     a                               ;[c8e5] 3c
     ld      ($ffd9),a                       ;[c8e6] 32 d9 ff
     ret                                     ;[c8e9] c9
 
+label_c8ea:
     ld      a,c                             ;[c8ea] 79
     and     $0f                             ;[c8eb] e6 0f
     rlca                                    ;[c8ed] 07
@@ -1337,6 +1446,7 @@ label_c7d8:
     pop     hl                              ;[c92d] e1
     ld      b,a                             ;[c92e] 47
     call    $c795                           ;[c92f] cd 95 c7
+label_c932:
     call    $c715                           ;[c932] cd 15 c7
     ld      a,(hl)                          ;[c935] 7e
     or      b                               ;[c936] b0
@@ -1345,33 +1455,38 @@ label_c7d8:
     dec     de                              ;[c939] 1b
     ld      a,d                             ;[c93a] 7a
     or      e                               ;[c93b] b3
-    jr      nz,$c932                        ;[c93c] 20 f4
+    jr      nz,label_c932                   ;[c93c] 20 f4
     call    $c79e                           ;[c93e] cd 9e c7
     ret                                     ;[c941] c9
 
     ld      a,c                             ;[c942] 79
     cp      $44                             ;[c943] fe 44
-    jr      nz,$c94b                        ;[c945] 20 04
+    jr      nz,label_c94b                   ;[c945] 20 04
     ld      c,$40                           ;[c947] 0e 40
-    jr      $c984                           ;[c949] 18 39
+    jr      label_c984                      ;[c949] 18 39
+label_c94b:
     cp      $45                             ;[c94b] fe 45
-    jr      nz,$c953                        ;[c94d] 20 04
+    jr      nz,label_c953                   ;[c94d] 20 04
     ld      c,$60                           ;[c94f] 0e 60
-    jr      $c984                           ;[c951] 18 31
+    jr      label_c984                      ;[c951] 18 31
+label_c953:
     cp      $46                             ;[c953] fe 46
-    jr      nz,$c95b                        ;[c955] 20 04
+    jr      nz,label_c95b                   ;[c955] 20 04
     ld      c,$20                           ;[c957] 0e 20
-    jr      $c984                           ;[c959] 18 29
+    jr      label_c984                      ;[c959] 18 29
+label_c95b:
     ld      a,($c86f)                       ;[c95b] 3a 6f c8
     ld      d,a                             ;[c95e] 57
     in      a,($d6)                         ;[c95f] db d6
     bit     5,a                             ;[c961] cb 6f
-    jr      z,$c967                         ;[c963] 28 02
+    jr      z,label_c967                    ;[c963] 28 02
     ld      d,$03                           ;[c965] 16 03
+label_c967:
     bit     6,a                             ;[c967] cb 77
-    jr      z,$c96f                         ;[c969] 28 04
+    jr      z,label_c96f                    ;[c969] 28 04
     set     5,d                             ;[c96b] cb ea
     set     6,d                             ;[c96d] cb f2
+label_c96f:
     ld      a,d                             ;[c96f] 7a
     ld      ($ffd3),a                       ;[c970] 32 d3 ff
     ld      b,$0a                           ;[c973] 06 0a
@@ -1384,6 +1499,7 @@ label_c7d8:
     xor     a                               ;[c982] af
     ret                                     ;[c983] c9
 
+label_c984:
     ld      a,($ffd3)                       ;[c984] 3a d3 ff
     and     $9f                             ;[c987] e6 9f
     or      c                               ;[c989] b1
@@ -1445,10 +1561,12 @@ label_c7d8:
     xor     a                               ;[c9e1] af
     ret                                     ;[c9e2] c9
 
+label_c9e3:
     call    $ca01                           ;[c9e3] cd 01 ca
     cp      $01                             ;[c9e6] fe 01
-    jr      nz,$c9eb                        ;[c9e8] 20 01
+    jr      nz,label_c9eb                   ;[c9e8] 20 01
     ld      a,c                             ;[c9ea] 79
+label_c9eb:
     ld      ($ffd8),a                       ;[c9eb] 32 d8 ff
     cp      $60                             ;[c9ee] fe 60
     jp      nc,$ca70                        ;[c9f0] d2 70 ca
@@ -1456,7 +1574,7 @@ label_c7d8:
     jp      c,$ca70                         ;[c9f5] da 70 ca
     call    $ca05                           ;[c9f8] cd 05 ca
     or      a                               ;[c9fb] b7
-    jr      z,$ca70                         ;[c9fc] 28 72
+    jr      z,label_ca70                    ;[c9fc] 28 72
     jp      $c6a3                           ;[c9fe] c3 a3 c6
     ld      hl,($bffa)                      ;[ca01] 2a fa bf
     jp      (hl)                            ;[ca04] e9
@@ -1540,6 +1658,7 @@ label_c7d8:
     call    z,$c8df                         ;[ca67] cc df c8
     call    m,$95c8                         ;[ca6a] fc c8 95
     call    z,$cd27                         ;[ca6d] cc 27 cd
+label_ca70:
     xor     a                               ;[ca70] af
     ld      ($ffd8),a                       ;[ca71] 32 d8 ff
     ld      ($ffd9),a                       ;[ca74] 32 d9 ff
@@ -1549,12 +1668,13 @@ label_c7d8:
 
     call    $cdd7                           ;[ca7c] cd d7 cd
     cp      $01                             ;[ca7f] fe 01
-    jr      nz,$ca8c                        ;[ca81] 20 09
+    jr      nz,label_ca8c                   ;[ca81] 20 09
     ld      a,c                             ;[ca83] 79
     cp      $31                             ;[ca84] fe 31
-    jr      c,$cab0                         ;[ca86] 38 28
+    jr      c,label_cab0                    ;[ca86] 38 28
     cp      $36                             ;[ca88] fe 36
-    jr      nc,$cab0                        ;[ca8a] 30 24
+    jr      nc,label_cab0                   ;[ca8a] 30 24
+label_ca8c:
     call    $cab5                           ;[ca8c] cd b5 ca
     or      a                               ;[ca8f] b7
     ret     nz                              ;[ca90] c0
@@ -1577,6 +1697,7 @@ label_c7d8:
     ld      hl,$ffdb                        ;[caa8] 21 db ff
     ld      bc,$0009                        ;[caab] 01 09 00
     ldir                                    ;[caae] ed b0
+label_cab0:
     call    $cd51                           ;[cab0] cd 51 cd
     xor     a                               ;[cab3] af
     ret                                     ;[cab4] c9
@@ -1591,21 +1712,24 @@ label_cac1:
     ld      a,(hl)                          ;[cac1] 7e
     inc     hl                              ;[cac2] 23
     cp      $7f                             ;[cac3] fe 7f
-    jr      z,$cacd                         ;[cac5] 28 06
+    jr      z,label_cacd                    ;[cac5] 28 06
     djnz    label_cac1                      ;[cac7] 10 f8
     ld      (hl),$7f                        ;[cac9] 36 7f
-    jr      $cad2                           ;[cacb] 18 05
+    jr      label_cad2                      ;[cacb] 18 05
+label_cacd:
     ld      hl,$ffe3                        ;[cacd] 21 e3 ff
     ld      (hl),$20                        ;[cad0] 36 20
+label_cad2:
     xor     a                               ;[cad2] af
     ret                                     ;[cad3] c9
 
     call    $cdd7                           ;[cad4] cd d7 cd
     cp      $04                             ;[cad7] fe 04
-    jr      z,$cadf                         ;[cad9] 28 04
+    jr      z,label_cadf                    ;[cad9] 28 04
     call    $c901                           ;[cadb] cd 01 c9
     ret                                     ;[cade] c9
 
+label_cadf:
     ld      a,c                             ;[cadf] 79
     sub     $20                             ;[cae0] d6 20
     ld      e,a                             ;[cae2] 5f
@@ -1622,10 +1746,11 @@ label_cac1:
 
     call    $cdd7                           ;[caf2] cd d7 cd
     cp      $02                             ;[caf5] fe 02
-    jr      z,$cafd                         ;[caf7] 28 04
+    jr      z,label_cafd                    ;[caf7] 28 04
     call    $c901                           ;[caf9] cd 01 c9
     ret                                     ;[cafc] c9
 
+label_cafd:
     ld      a,c                             ;[cafd] 79
     sub     $20                             ;[cafe] d6 20
     ld      e,a                             ;[cb00] 5f
@@ -1646,31 +1771,32 @@ label_cac1:
 
     call    $cdd7                           ;[cb1c] cd d7 cd
     cp      $04                             ;[cb1f] fe 04
-    jr      z,$cb27                         ;[cb21] 28 04
+    jr      z,label_cb27                    ;[cb21] 28 04
     call    $c901                           ;[cb23] cd 01 c9
     ret                                     ;[cb26] c9
 
+label_cb27:
     ld      a,c                             ;[cb27] 79
     sub     $20                             ;[cb28] d6 20
     ld      e,a                             ;[cb2a] 5f
     ld      a,$4f                           ;[cb2b] 3e 4f
     cp      e                               ;[cb2d] bb
-    jr      c,$cb68                         ;[cb2e] 38 38
+    jr      c,label_cb68                    ;[cb2e] 38 38
     ld      hl,$ffda                        ;[cb30] 21 da ff
     ld      b,(hl)                          ;[cb33] 46
     inc     hl                              ;[cb34] 23
     ld      a,(hl)                          ;[cb35] 7e
     cp      $18                             ;[cb36] fe 18
-    jr      nc,$cb68                        ;[cb38] 30 2e
+    jr      nc,label_cb68                   ;[cb38] 30 2e
     ld      c,a                             ;[cb3a] 4f
     inc     hl                              ;[cb3b] 23
     ld      d,(hl)                          ;[cb3c] 56
     ld      a,c                             ;[cb3d] 79
     cp      b                               ;[cb3e] b8
-    jr      c,$cb68                         ;[cb3f] 38 27
+    jr      c,label_cb68                    ;[cb3f] 38 27
     ld      a,e                             ;[cb41] 7b
     cp      d                               ;[cb42] ba
-    jr      c,$cb68                         ;[cb43] 38 23
+    jr      c,label_cb68                    ;[cb43] 38 23
     ld      hl,$ffcd                        ;[cb45] 21 cd ff
     ld      (hl),c                          ;[cb48] 71
     inc     hl                              ;[cb49] 23
@@ -1688,40 +1814,45 @@ label_cac1:
     add     e                               ;[cb59] 83
     ld      hl,$ffd1                        ;[cb5a] 21 d1 ff
     bit     3,(hl)                          ;[cb5d] cb 5e
-    jr      z,$cb62                         ;[cb5f] 28 01
+    jr      z,label_cb62                    ;[cb5f] 28 01
     add     a                               ;[cb61] 87
+label_cb62:
     ld      ($ffc8),a                       ;[cb62] 32 c8 ff
     call    $cc1b                           ;[cb65] cd 1b cc
+label_cb68:
     xor     a                               ;[cb68] af
     ret                                     ;[cb69] c9
 
     call    $cdd7                           ;[cb6a] cd d7 cd
     cp      $02                             ;[cb6d] fe 02
-    jr      z,$cb75                         ;[cb6f] 28 04
+    jr      z,label_cb75                    ;[cb6f] 28 04
     call    $c901                           ;[cb71] cd 01 c9
     ret                                     ;[cb74] c9
 
+label_cb75:
     ld      a,c                             ;[cb75] 79
     sub     $20                             ;[cb76] d6 20
     ld      c,a                             ;[cb78] 4f
     ld      a,$4f                           ;[cb79] 3e 4f
     cp      c                               ;[cb7b] b9
-    jr      c,$cb9d                         ;[cb7c] 38 1f
+    jr      c,label_cb9d                    ;[cb7c] 38 1f
     ld      a,($ffd1)                       ;[cb7e] 3a d1 ff
     bit     3,a                             ;[cb81] cb 5f
-    jr      z,$cb88                         ;[cb83] 28 03
+    jr      z,label_cb88                    ;[cb83] 28 03
     ld      a,c                             ;[cb85] 79
     add     a                               ;[cb86] 87
     ld      c,a                             ;[cb87] 4f
+label_cb88:
     ld      a,($ffda)                       ;[cb88] 3a da ff
     cp      $19                             ;[cb8b] fe 19
-    jr      nc,$cb9d                        ;[cb8d] 30 0e
+    jr      nc,label_cb9d                   ;[cb8d] 30 0e
     ld      b,a                             ;[cb8f] 47
     ld      ($ffcb),a                       ;[cb90] 32 cb ff
     ld      a,c                             ;[cb93] 79
     ld      ($ffca),a                       ;[cb94] 32 ca ff
     call    $c6f1                           ;[cb97] cd f1 c6
     call    $c71c                           ;[cb9a] cd 1c c7
+label_cb9d:
     xor     a                               ;[cb9d] af
     ret                                     ;[cb9e] c9
 
@@ -1731,22 +1862,24 @@ label_cac1:
     ld      c,a                             ;[cba5] 4f
     ld      a,$4f                           ;[cba6] 3e 4f
     cp      c                               ;[cba8] b9
-    jr      c,$cbb9                         ;[cba9] 38 0e
+    jr      c,label_cbb9                    ;[cba9] 38 0e
     ld      a,($ffcb)                       ;[cbab] 3a cb ff
     ld      b,a                             ;[cbae] 47
     ld      a,c                             ;[cbaf] 79
     ld      ($ffca),a                       ;[cbb0] 32 ca ff
     call    $c6f1                           ;[cbb3] cd f1 c6
     call    $c71c                           ;[cbb6] cd 1c c7
+label_cbb9:
     xor     a                               ;[cbb9] af
     ret                                     ;[cbba] c9
 
     call    $cdd7                           ;[cbbb] cd d7 cd
     cp      $04                             ;[cbbe] fe 04
-    jr      z,$cbc6                         ;[cbc0] 28 04
+    jr      z,label_cbc6                    ;[cbc0] 28 04
     call    $c901                           ;[cbc2] cd 01 c9
     ret                                     ;[cbc5] c9
 
+label_cbc6:
     ld      a,c                             ;[cbc6] 79
     sub     $20                             ;[cbc7] d6 20
     ld      e,a                             ;[cbc9] 5f
@@ -1768,19 +1901,21 @@ label_cac1:
     ld      a,($ffd2)                       ;[cbe3] 3a d2 ff
     ld      d,a                             ;[cbe6] 57
     ld      e,$20                           ;[cbe7] 1e 20
+label_cbe9:
     call    $c715                           ;[cbe9] cd 15 c7
     ld      a,(hl)                          ;[cbec] 7e
     and     d                               ;[cbed] a2
-    jr      nz,$cbf9                        ;[cbee] 20 09
+    jr      nz,label_cbf9                   ;[cbee] 20 09
     ld      (hl),$00                        ;[cbf0] 36 00
     call    $c795                           ;[cbf2] cd 95 c7
     ld      (hl),e                          ;[cbf5] 73
     call    $c795                           ;[cbf6] cd 95 c7
+label_cbf9:
     inc     hl                              ;[cbf9] 23
     dec     bc                              ;[cbfa] 0b
     ld      a,b                             ;[cbfb] 78
     or      c                               ;[cbfc] b1
-    jr      nz,$cbe9                        ;[cbfd] 20 ea
+    jr      nz,label_cbe9                   ;[cbfd] 20 ea
     call    $c79e                           ;[cbff] cd 9e c7
     xor     a                               ;[cc02] af
     ret                                     ;[cc03] c9
@@ -1820,7 +1955,9 @@ label_cac1:
     ret                                     ;[cc44] c9
 
     ld      b,$00                           ;[cc45] 06 00
+label_cc47:
     ld      c,$00                           ;[cc47] 0e 00
+label_cc49:
     push    bc                              ;[cc49] c5
     call    $cdf4                           ;[cc4a] cd f4 cd
     ld      c,d                             ;[cc4d] 4a
@@ -1829,19 +1966,21 @@ label_cac1:
     pop     de                              ;[cc52] d1
     pop     bc                              ;[cc53] c1
     bit     3,e                             ;[cc54] cb 5b
-    jr      z,$cc65                         ;[cc56] 28 0d
+    jr      z,label_cc65                    ;[cc56] 28 0d
     inc     c                               ;[cc58] 0c
     ld      a,c                             ;[cc59] 79
     cp      $50                             ;[cc5a] fe 50
-    jr      z,$cc6b                         ;[cc5c] 28 0d
+    jr      z,label_cc6b                    ;[cc5c] 28 0d
     push    bc                              ;[cc5e] c5
     ld      c,$20                           ;[cc5f] 0e 20
     call    $ffa0                           ;[cc61] cd a0 ff
     pop     bc                              ;[cc64] c1
+label_cc65:
     inc     c                               ;[cc65] 0c
     ld      a,c                             ;[cc66] 79
     cp      $50                             ;[cc67] fe 50
-    jr      nz,$cc49                        ;[cc69] 20 de
+    jr      nz,label_cc49                   ;[cc69] 20 de
+label_cc6b:
     push    bc                              ;[cc6b] c5
     ld      c,$0d                           ;[cc6c] 0e 0d
     call    $ffa0                           ;[cc6e] cd a0 ff
@@ -1851,7 +1990,7 @@ label_cac1:
     inc     b                               ;[cc77] 04
     ld      a,b                             ;[cc78] 78
     cp      $18                             ;[cc79] fe 18
-    jr      nz,$cc47                        ;[cc7b] 20 ca
+    jr      nz,label_cc47                   ;[cc7b] 20 ca
     xor     a                               ;[cc7d] af
     ret                                     ;[cc7e] c9
 
@@ -1873,16 +2012,17 @@ label_cac1:
     call    $cdd7                           ;[cc95] cd d7 cd
     ld      a,c                             ;[cc98] 79
     cp      $30                             ;[cc99] fe 30
-    jr      z,$ccab                         ;[cc9b] 28 0e
+    jr      z,label_ccab                    ;[cc9b] 28 0e
     cp      $31                             ;[cc9d] fe 31
-    jr      z,$ccbd                         ;[cc9f] 28 1c
+    jr      z,label_ccbd                    ;[cc9f] 28 1c
     cp      $32                             ;[cca1] fe 32
-    jr      z,$ccdf                         ;[cca3] 28 3a
+    jr      z,label_ccdf                    ;[cca3] 28 3a
     cp      $33                             ;[cca5] fe 33
-    jr      z,$ccf4                         ;[cca7] 28 4b
+    jr      z,label_ccf4                    ;[cca7] 28 4b
     xor     a                               ;[cca9] af
     ret                                     ;[ccaa] c9
 
+label_ccab:
     ld      a,($ffcb)                       ;[ccab] 3a cb ff
     ld      b,a                             ;[ccae] 47
     ld      d,a                             ;[ccaf] 57
@@ -1894,6 +2034,7 @@ label_cac1:
     xor     a                               ;[ccbb] af
     ret                                     ;[ccbc] c9
 
+label_ccbd:
     ld      a,($ffce)                       ;[ccbd] 3a ce ff
     ld      b,a                             ;[ccc0] 47
     ld      a,($ffcb)                       ;[ccc1] 3a cb ff
@@ -1912,6 +2053,7 @@ label_cac1:
     xor     a                               ;[ccdd] af
     ret                                     ;[ccde] c9
 
+label_ccdf:
     ld      a,($ffcb)                       ;[ccdf] 3a cb ff
     ld      b,a                             ;[cce2] 47
     ld      a,($ffca)                       ;[cce3] 3a ca ff
@@ -1924,13 +2066,14 @@ label_cac1:
     xor     a                               ;[ccf2] af
     ret                                     ;[ccf3] c9
 
+label_ccf4:
     ld      a,($ffce)                       ;[ccf4] 3a ce ff
     ld      b,a                             ;[ccf7] 47
     ld      a,($ffcb)                       ;[ccf8] 3a cb ff
     ld      c,a                             ;[ccfb] 4f
     ld      a,($ffcd)                       ;[ccfc] 3a cd ff
     cp      c                               ;[ccff] b9
-    jr      z,$cd18                         ;[cd00] 28 16
+    jr      z,label_cd18                    ;[cd00] 28 16
     ld      a,c                             ;[cd02] 79
     ld      ($ffce),a                       ;[cd03] 32 ce ff
     push    bc                              ;[cd06] c5
@@ -1938,12 +2081,14 @@ label_cac1:
     pop     bc                              ;[cd0a] c1
     ld      a,b                             ;[cd0b] 78
     ld      ($ffce),a                       ;[cd0c] 32 ce ff
+label_cd0f:
     ld      a,($ffd0)                       ;[cd0f] 3a d0 ff
     ld      c,a                             ;[cd12] 4f
     call    $cb9f                           ;[cd13] cd 9f cb
     xor     a                               ;[cd16] af
     ret                                     ;[cd17] c9
 
+label_cd18:
     ld      b,a                             ;[cd18] 47
     ld      d,a                             ;[cd19] 57
     ld      a,($ffcf)                       ;[cd1a] 3a cf ff
@@ -1951,25 +2096,28 @@ label_cac1:
     ld      a,($ffd0)                       ;[cd1e] 3a d0 ff
     ld      c,a                             ;[cd21] 4f
     call    $c805                           ;[cd22] cd 05 c8
-    jr      $cd0f                           ;[cd25] 18 e8
+    jr      label_cd0f                      ;[cd25] 18 e8
     call    $cdd7                           ;[cd27] cd d7 cd
     cp      $02                             ;[cd2a] fe 02
     jp      nc,$cd8a                        ;[cd2c] d2 8a cd
     ld      a,c                             ;[cd2f] 79
     cp      $30                             ;[cd30] fe 30
-    jr      z,$cd42                         ;[cd32] 28 0e
+    jr      z,label_cd42                    ;[cd32] 28 0e
     cp      $31                             ;[cd34] fe 31
-    jr      z,$cd46                         ;[cd36] 28 0e
+    jr      z,label_cd46                    ;[cd36] 28 0e
     cp      $34                             ;[cd38] fe 34
-    jr      z,$cd51                         ;[cd3a] 28 15
+    jr      z,label_cd51                    ;[cd3a] 28 15
     cp      $35                             ;[cd3c] fe 35
-    jr      z,$cd8a                         ;[cd3e] 28 4a
+    jr      z,label_cd8a                    ;[cd3e] 28 4a
     xor     a                               ;[cd40] af
     ret                                     ;[cd41] c9
 
+label_cd42:
     ld      b,$19                           ;[cd42] 06 19
-    jr      $cd48                           ;[cd44] 18 02
+    jr      label_cd48                      ;[cd44] 18 02
+label_cd46:
     ld      b,$18                           ;[cd46] 06 18
+label_cd48:
     ld      a,$06                           ;[cd48] 3e 06
     out     ($a0),a                         ;[cd4a] d3 a0
     ld      a,b                             ;[cd4c] 78
@@ -1977,6 +2125,7 @@ label_cac1:
     xor     a                               ;[cd4f] af
     ret                                     ;[cd50] c9
 
+label_cd51:
     ld      hl,($bff4)                      ;[cd51] 2a f4 bf
     ex      de,hl                           ;[cd54] eb
     ld      b,$18                           ;[cd55] 06 18
@@ -1999,25 +2148,28 @@ label_cd66:
     djnz    label_cd66                      ;[cd74] 10 f0
     ld      a,($ffda)                       ;[cd76] 3a da ff
     or      a                               ;[cd79] b7
-    jr      z,$cd88                         ;[cd7a] 28 0c
+    jr      z,label_cd88                    ;[cd7a] 28 0c
     ld      b,$0a                           ;[cd7c] 06 0a
     ld      a,($bfeb)                       ;[cd7e] 3a eb bf
     ld      c,a                             ;[cd81] 4f
     xor     a                               ;[cd82] af
     ld      ($ffda),a                       ;[cd83] 32 da ff
-    jr      $cd66                           ;[cd86] 18 de
+    jr      label_cd66                      ;[cd86] 18 de
+label_cd88:
     xor     a                               ;[cd88] af
     ret                                     ;[cd89] c9
 
+label_cd8a:
     ld      a,c                             ;[cd8a] 79
     cp      $0d                             ;[cd8b] fe 0d
-    jr      z,$cdb5                         ;[cd8d] 28 26
+    jr      z,label_cdb5                    ;[cd8d] 28 26
     ld      a,($ffd9)                       ;[cd8f] 3a d9 ff
     cp      $01                             ;[cd92] fe 01
-    jr      z,$cd9a                         ;[cd94] 28 04
+    jr      z,label_cd9a                    ;[cd94] 28 04
     call    $cdb7                           ;[cd96] cd b7 cd
     ret                                     ;[cd99] c9
 
+label_cd9a:
     ld      b,$18                           ;[cd9a] 06 18
     ld      c,$00                           ;[cd9c] 0e 00
     call    $c6f1                           ;[cd9e] cd f1 c6
@@ -2033,6 +2185,7 @@ label_cdad:
     djnz    label_cdad                      ;[cdb2] 10 f9
     ret                                     ;[cdb4] c9
 
+label_cdb5:
     xor     a                               ;[cdb5] af
     ret                                     ;[cdb6] c9
 
@@ -2583,7 +2736,10 @@ label_cdad:
     nop                                     ;[cffa] 00
     nop                                     ;[cffb] 00
 
-    ; "Splash screen" string
-    ; [cffc] 31 2e 30 31    ; 1.01
+    ; "Splash screen" string ; 1.01
+    BYTE $31
+    BYTE $2e
+    BYTE $30
+    BYTE $31
 
     ; In the original ROM, here starts a perfect replica of all the above program.
