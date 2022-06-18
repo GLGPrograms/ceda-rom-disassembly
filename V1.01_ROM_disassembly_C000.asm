@@ -624,33 +624,39 @@
     jp      z,$c6a3                         ;[c475] ca a3 c6
     or      a                               ;[c478] b7
     jp      nz,$c4be                        ;[c479] c2 be c4
+    ;;
     ld      a,c                             ;[c47c] 79
-    cp      $1b                             ;[c47d] fe 1b
+    cp      $1b                             ;[c47d] fe 1b           ; ESC
     jr      z,$c4b6                         ;[c47f] 28 35
-    cp      $20                             ;[c481] fe 20
+    cp      $20                             ;[c481] fe 20           ; space
     jp      nc,$c4be                        ;[c483] d2 be c4
-    cp      $0d                             ;[c486] fe 0d
+    cp      $0d                             ;[c486] fe 0d           ; CR
     jp      z,$c524                         ;[c488] ca 24 c5
-    cp      $0a                             ;[c48b] fe 0a
+    cp      $0a                             ;[c48b] fe 0a           ; LF
     jp      z,$c532                         ;[c48d] ca 32 c5
-    cp      $0b                             ;[c490] fe 0b
+    cp      $0b                             ;[c490] fe 0b           ; TAB
     jp      z,$c558                         ;[c492] ca 58 c5
-    cp      $0c                             ;[c495] fe 0c
+    cp      $0c                             ;[c495] fe 0c           ; NewPage
     jp      z,$c56f                         ;[c497] ca 6f c5
-    cp      $08                             ;[c49a] fe 08
+    cp      $08                             ;[c49a] fe 08           ; Backspace
     jp      z,$c59b                         ;[c49c] ca 9b c5
-    cp      $1e                             ;[c49f] fe 1e
+    cp      $1e                             ;[c49f] fe 1e           ; RS
     jp      z,$c5db                         ;[c4a1] ca db c5
-    cp      $1a                             ;[c4a4] fe 1a
+    cp      $1a                             ;[c4a4] fe 1a           ; SUB
     jp      z,$c5ee                         ;[c4a6] ca ee c5
-    cp      $07                             ;[c4a9] fe 07
+    cp      $07                             ;[c4a9] fe 07           ; BEL
     call    z,$c5f4                         ;[c4ab] cc f4 c5
-    cp      $00                             ;[c4ae] fe 00
+    cp      $00                             ;[c4ae] fe 00           ; NUL
     jp      z,$c6a3                         ;[c4b0] ca a3 c6
     jp      $c4be                           ;[c4b3] c3 be c4
+
+    ; Handle ESC
     ld      a,$01                           ;[c4b6] 3e 01
     ld      ($ffd8),a                       ;[c4b8] 32 d8 ff
     jp      $c6a3                           ;[c4bb] c3 a3 c6
+
+    ; Handle all, but special characters
+    ; copy IY in HL?
     push    iy                              ;[c4be] fd e5
     pop     hl                              ;[c4c0] e1
     call    $c715                           ;[c4c1] cd 15 c7
