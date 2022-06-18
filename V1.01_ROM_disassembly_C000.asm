@@ -42,13 +42,13 @@
     jr      z,$c050                         ;[c054]
     in      a,($b2)                         ;[c056]
     out     ($da),a                         ;[c058]
-    ld      c,$56                           ;[c05a] V
-    call    $c45e                           ;[c05c]
+    ld      c,$56                           ;[c05a] hardcoded 'V' for splash screen
+    call    $c45e                           ;[c05c] putchar()
     ld      hl,$cffc                        ;[c05f] "Splash screen" string pointer
     ld      b,$04                           ;[c062]
     ld      c,(hl)                          ;[c064]
     inc     hl                              ;[c065]
-    call    $c45e                           ;[c066] some sort of putchar to display char in c
+    call    $c45e                           ;[c066] putchar()
     djnz    $c064                           ;[c069]
     call    $c0a7                           ;[c06b]
     ld      a,b                             ;[c06e]
@@ -563,7 +563,7 @@
     out     ($c1),a                         ;[c419]
     ret                                     ;[c41b]
 
-    ; FUNCTION C41C ; while( ioaddr(0xc0).4 == 1 ), wait
+    ; SUBROUTINE C41C ; while( ioaddr(0xc0).4 == 1 ), wait
     in      a,($c0)                         ;[c41c]
     bit     4,a                             ;[c41e]
     jr      nz,$c41c                        ;[c420]
@@ -608,7 +608,7 @@
     ; STATIC DATA for C43F
     ;[c45c] 6f 1b
 
-    ; SUBROUTINE C45E
+    ; SUBROUTINE C45E ; putchar()
     push    af                              ;[c45e] f5
     push    bc                              ;[c45f] c5
     push    de                              ;[c460] d5
@@ -2566,11 +2566,11 @@
     nop                                     ;[cff9] 00
     nop                                     ;[cffa] 00
     nop                                     ;[cffb] 00
-    
+
     ; "Splash screen" string
     ; [cffc] 31 2e 30 31    ; 1.01
-    
-    
+
+
     ;; Here it begins a replica of the previous data
     jp      $c030                           ;[d000] reset vector
     jp      $c027                           ;[d000] c3 27 c0
