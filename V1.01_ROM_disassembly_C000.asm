@@ -1196,15 +1196,15 @@
     ret                                     ;[c864] c9
 
     ; CRTC Configuration Table
-    ;[c865] 63  ; R0  Horiz tot ch
-    ;[c866] 50  ; R1  Horiz disp ch
-    ;[c867] 54  ; R2  Horiz sync pulse pos
-    ;[c868] aa  ; R3  Horiz sync pulse len
-    ;[c869] 19  ; R4  Vert tot ch
+    ;[c865] 63  ; R0  Horizontal total character - 1 ; 100 - 1 = "99"
+    ;[c866] 50  ; R1  Horizontal disp character "80"
+    ;[c867] 54  ; R2  Horizontal sync pulse position
+    ;[c868] aa  ; R3  Horizontal sync pulse length
+    ;[c869] 19  ; R4  Vertical total character
     ;[c86a] 06  ; R5  Total raster adjust
-    ;[c86b] 19  ; R6  Vert disp ch
-    ;[c86c] 19  ; R7  Vert sync pulse pos
-    ;[c86d] 00  ; R8  Interlaced mode
+    ;[c86b] 19  ; R6  Vertical displayed characters
+    ;[c86c] 19  ; R7  Vertical sync pulse position
+    ;[c86d] 00  ; R8  Interlaced mode (not interlaced)
     ;[c86e] 0d  ; R9  Maximum raster
     ;[c86f] 0d  ; R10 Cursor start raster
     ;[c870] 0d  ; R11 Cursor end raster
