@@ -899,13 +899,13 @@ label_c5ee:
     ret                                     ;[c5f7]
 
     ; SUBROUTINE 0xC5F8
-    ld      a,($ffca)                       ;[c5f8] POSX in C
+    ld      a,($ffca)                       ;[c5f8] POSX (?) in c
     ld      c,a                             ;[c5fb]
     inc     c                               ;[c5fc]
-    ld      a,($ffd1)                       ;[c5fd] FLAG in A
+    ld      a,($ffd1)                       ;[c5fd] check if flag set in a (bit 3)
     bit     3,a                             ;[c600]
     jr      z,label_c605                    ;[c602]
-    inc     c                               ;[c604]
+    inc     c                               ;[c604] if set, increment POSX
 label_c605:
     ld      a,($ffcf)                       ;[c605]
     cp      c                               ;[c608]
