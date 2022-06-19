@@ -2775,3 +2775,4 @@ label_cdb5:
     BYTE $31
 
     ; In the original ROM, here starts a perfect replica of all the above program.
+    ; Except for the "splash screen", which is $31 $2e $30 $ff
