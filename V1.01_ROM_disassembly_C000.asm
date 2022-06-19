@@ -114,7 +114,7 @@ label_c0b4:
     im      2                               ;[c0c2] set interrupt mode 2
     call    $c0d1                           ;[c0c4] initialize timer ($e0)
     call    $c43f                           ;[c0c7] setup $c0 peripheral?
-    call    $c108                           ;[c0ca] setup $b0 peripheral?
+    call    $c108                           ;[c0ca] setup SIO ($b0 peripheral)
     call    $c88d                           ;[c0cd] setup CRTC ($a0) and do some stuff with bank switch? ($80)
     ret                                     ;[c0d0]
 
@@ -180,10 +180,8 @@ label_c0e1:
     BYTE $02                                 ;[c106]
     BYTE $01                                 ;[c107]
 
-    BYTE $21 ; ???
-    BYTE $34 ; ???
-
-    pop     bc                              ;[c10a] c1
+    ld      hl,$c134                        ;[c108]
+    ; loop around $c134 table, writing to $b1
 label_c10b:
     ld      a,(hl)                          ;[c10b] 7e
     inc     hl                              ;[c10c] 23
@@ -194,6 +192,8 @@ label_c10b:
     out     ($b1),a                         ;[c114] d3 b1
     inc     hl                              ;[c116] 23
     jr      label_c10b                      ;[c117] 18 f2
+
+    ; loop around $c141 table, writing to $b3
 label_c119:
     ld      a,(hl)                          ;[c119] 7e
     cp      $ff                             ;[c11a] fe ff
@@ -204,6 +204,8 @@ label_c119:
     out     ($b3),a                         ;[c122] d3 b3
     inc     hl                              ;[c124] 23
     jr      label_c119                      ;[c125] 18 f2
+
+    ; Do some read from $b0/$b2
 label_c127:
     in      a,($b0)                         ;[c127] db b0
     in      a,($b2)                         ;[c129] db b2
@@ -213,31 +215,37 @@ label_c127:
     in      a,($b2)                         ;[c131] db b2
     ret                                     ;[c133] c9
 
-    nop                                     ;[c134] 00
-    djnz    label_c137                      ;[c135] 10 00
-label_c137:
-    djnz    label_c13d                      ;[c137] 10 04
-    ld      b,h                             ;[c139] 44
-    ld      bc,$0300                        ;[c13a] 01 00 03
-label_c13d:
-    pop     bc                              ;[c13d] c1
-    dec     b                               ;[c13e] 05
-    jp      pe,$00ff                        ;[c13f] ea ff 00
-    djnz    label_c144                      ;[c142] 10 00
-label_c144:
-    djnz    label_c14a                      ;[c144] 10 04
-    ld      b,h                             ;[c146] 44
-    ld      bc,$0300                        ;[c147] 01 00 03
-label_c14a:
-    pop     bc                              ;[c14a] c1
-    dec     b                               ;[c14b] 05
-    ; WORK IN PROGRESS
-    ; Original disassembled code was misaligned at this point.
-    ; Manually fixed by removing the next instruction and splitting
-    ; it in raw bytes and partial next opcode.
-    ; jp      pe,$21ff                        ;[c14c] ea ff
-    BYTE $ea
-    BYTE $ff
+    ; Configuration table for SIO ChA?
+sio_chA_cfg_base:
+    BYTE $00                                ;[c134]
+    BYTE $10                                ;[c135]
+    BYTE $00                                ;[c136]
+    BYTE $10                                ;[c137]
+    BYTE $04                                ;[c138]
+    BYTE $44                                ;[c139]
+    BYTE $01                                ;[c13a]
+    BYTE $00                                ;[c13b]
+    BYTE $03                                ;[c13c]
+    BYTE $c1                                ;[c13d]
+    BYTE $05                                ;[c13e]
+    BYTE $ea                                ;[c13f]
+    BYTE $ff                                ;[c140]
+
+    ; Configuration table for SIO ChB?
+sio_chB_cfg_base:
+    BYTE $00                                ;[c141]
+    BYTE $10                                ;[c142]
+    BYTE $00                                ;[c143]
+    BYTE $10                                ;[c144]
+    BYTE $04                                ;[c145]
+    BYTE $44                                ;[c146]
+    BYTE $01                                ;[c147]
+    BYTE $00                                ;[c148]
+    BYTE $03                                ;[c149]
+    BYTE $c1                                ;[c14a]
+    BYTE $05                                ;[c14b]
+    BYTE $ea                                ;[c14c]
+    BYTE $ff                                ;[c14d]
 
     ; SUBROUTINE C14E;
     ; Loads a piece of code in RAM, then executes it
