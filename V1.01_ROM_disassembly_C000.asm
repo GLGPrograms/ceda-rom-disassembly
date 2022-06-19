@@ -695,52 +695,56 @@ label_c430:
     jp      z,$c6a3                         ;[c475]
     or      a                               ;[c478]
     jp      nz,label_c4be                   ;[c479]
+    ; Character switch: handle not printable characters
     ld      a,c                             ;[c47c]
-    cp      $1b                             ;[c47d]
+    cp      $1b                             ;[c47d] jump if ESC
     jr      z,label_c4b6                    ;[c47f]
-    cp      $20                             ;[c481]
+    cp      $20                             ;[c481] jump if printable (>=' ')
     jp      nc,label_c4be                   ;[c483]
-    cp      $0d                             ;[c486]
+    cp      $0d                             ;[c486] jump if CR
     jp      z,label_c524                    ;[c488]
-    cp      $0a                             ;[c48b]
+    cp      $0a                             ;[c48b] jump if LF
     jp      z,label_c532                    ;[c48d]
-    cp      $0b                             ;[c490]
+    cp      $0b                             ;[c490] jump if TAB
     jp      z,label_c558                    ;[c492]
-    cp      $0c                             ;[c495]
+    cp      $0c                             ;[c495] jump if NewPage
     jp      z,label_c56f                    ;[c497]
-    cp      $08                             ;[c49a]
+    cp      $08                             ;[c49a] jump if Backspace
     jp      z,label_c59b                    ;[c49c]
-
-
-    cp      $1e                             ;[c49f]
+    cp      $1e                             ;[c49f] jump if RS
     jp      z,label_c5db                    ;[c4a1]
-    cp      $1a                             ;[c4a4]
+    cp      $1a                             ;[c4a4] jump if SUB
     jp      z,label_c5ee                    ;[c4a6]
-    cp      $07                             ;[c4a9]
+    cp      $07                             ;[c4a9] jump if BEL
     call    z,$c5f4                         ;[c4ab]
-    cp      $00                             ;[c4ae]
+    cp      $00                             ;[c4ae] jump if NUL
     jp      z,label_c6a3                    ;[c4b0]
-    jp      label_c4be                      ;[c4b3]
+    jp      label_c4be                      ;[c4b3] jump if any other not printable character
+
+    ; Handle ESC
 label_c4b6:
     ld      a,$01                           ;[c4b6]
     ld      ($ffd8),a                       ;[c4b8]
     jp      label_c6a3                      ;[c4bb]
+
+    ; Handle all, but special characters
 label_c4be:
-    push    iy                              ;[c4be]
+    ; copy IY in HL
+    push    iy                              ;[c4be] copy IY in HL
     pop     hl                              ;[c4c0]
-    call    $c715                           ;[c4c1]
-    ld      (hl),c                          ;[c4c4]
-    call    $c795                           ;[c4c5]
+    call    $c715                           ;[c4c1] retreive cursor position in video memory
+    ld      (hl),c                          ;[c4c4] put character in $d000-$d7ff (video memory)
+    call    $c795                           ;[c4c5] set MSB in $81
     ld      a,($ffd1)                       ;[c4c8]
     ld      b,a                             ;[c4cb]
     ld      a,($ffd2)                       ;[c4cc]
-    and     (hl)                            ;[c4cf]
-    or      b                               ;[c4d0]
-    ld      (hl),a                          ;[c4d1]
-    call    $c79e                           ;[c4d2]
-    call    $c5f8                           ;[c4d5]
-    jr      c,label_c4e0                    ;[c4d8]
-    call    $c613                           ;[c4da]
+    and     (hl)                            ;[c4cf] a = *(0xffd2) & character in video memory
+    or      b                               ;[c4d0] a |= *(0xffd1)
+    ld      (hl),a                          ;[c4d1] write again in video memory
+    call    $c79e                           ;[c4d2] clear MSB in $81
+    call    $c5f8                           ;[c4d5] seem to increment column position
+    jr      c,label_c4e0                    ;[c4d8] if $c5f8 routine returned carry, jump
+    call    $c613                           ;[c4da] increments hl counter
     jp      label_c6a3                      ;[c4dd]
 label_c4e0:
     ld      a,($ffcb)                       ;[c4e0]
@@ -894,22 +898,23 @@ label_c5ee:
     out     ($da),a                         ;[c5f5]
     ret                                     ;[c5f7]
 
-    ld      a,($ffca)                       ;[c5f8] 3a ca ff
-    ld      c,a                             ;[c5fb] 4f
-    inc     c                               ;[c5fc] 0c
-    ld      a,($ffd1)                       ;[c5fd] 3a d1 ff
-    bit     3,a                             ;[c600] cb 5f
-    jr      z,label_c605                    ;[c602] 28 01
-    inc     c                               ;[c604] 0c
+    ; SUBROUTINE 0xC5F8
+    ld      a,($ffca)                       ;[c5f8] POSX in C
+    ld      c,a                             ;[c5fb]
+    inc     c                               ;[c5fc]
+    ld      a,($ffd1)                       ;[c5fd] FLAG in A
+    bit     3,a                             ;[c600]
+    jr      z,label_c605                    ;[c602]
+    inc     c                               ;[c604]
 label_c605:
-    ld      a,($ffcf)                       ;[c605] 3a cf ff
-    cp      c                               ;[c608] b9
-    ld      a,c                             ;[c609] 79
-    jr      nc,label_c60f                   ;[c60a] 30 03
-    ld      a,($ffd0)                       ;[c60c] 3a d0 ff
+    ld      a,($ffcf)                       ;[c605]
+    cp      c                               ;[c608]
+    ld      a,c                             ;[c609]
+    jr      nc,label_c60f                   ;[c60a]
+    ld      a,($ffd0)                       ;[c60c]
 label_c60f:
-    ld      ($ffca),a                       ;[c60f] 32 ca ff
-    ret                                     ;[c612] c9
+    ld      ($ffca),a                       ;[c60f]
+    ret                                     ;[c612]
 
     inc     hl                              ;[c613] 23
     ld      a,($ffd1)                       ;[c614] 3a d1 ff
