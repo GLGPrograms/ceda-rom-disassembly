@@ -680,7 +680,7 @@ label_c430:
     BYTE $1b
 
     ; SUBROUTINE C45E
-putchar:
+bios_putchar_c45e:
     ; arguments:
     ; - c: character to be printed
     push    af                              ;[c45e] save all registers
