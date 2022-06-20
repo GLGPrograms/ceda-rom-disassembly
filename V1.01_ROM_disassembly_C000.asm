@@ -679,8 +679,10 @@ label_c430:
     BYTE $6f
     BYTE $1b
 
-    ; SUBROUTINE C45E ; putchar(c : char)
+    ; SUBROUTINE C45E
 putchar:
+    ; arguments:
+    ; - c: character to be printed
     push    af                              ;[c45e] save all registers
     push    bc                              ;[c45f]
     push    de                              ;[c460]
@@ -736,7 +738,7 @@ label_c4b6:
 label_c4be:
     push    iy                              ;[c4be]
     pop     hl                              ;[c4c0] hl <- iy (copy of cursor position)
-    call    $c715                           ;[c4c1] retreive cursor position in video memory
+    call    $c715                           ;[c4c1] compute cursor position in video memory
     ld      (hl),c                          ;[c4c4] put character in $d000-$d7ff (video memory)
     call    $c795                           ;[c4c5] set MSB in $81
     ld      a,($ffd1)                       ;[c4c8]
@@ -1102,7 +1104,10 @@ label_c701:
     ret                                     ;[c714] c9
 
     ; SUBROUTINE 0xC715; compute current video memory pointer from current cursor
-    ; position (hl=iy=$ffd7:$ffd6).
+    ; arguments:
+    ; - hl: cursor position
+    ; return:
+    ; - hl: video memory pointer
     ; Memento: video memory is mapped to 0xd000:0xd7ff
     ld      a,h                             ;[c715]
     and     $07                             ;[c716] hl &= 0x07ff
@@ -1389,7 +1394,7 @@ label_c88b:
 
     ; SUBROUTINE C88D; CRTC initialization
     ld      hl,crtc_cfg_base                ;[c88d] CRTC configuration table addr
-    ld      b,$10                           ;[c890] CRTC counter, $10 = # of registers
+    ld      b,$10                           ;[c890] CRTC counter, $10 = # of entries in crtc_cfg table
     ld      c,$a1                           ;[c892] address CRTC with RS=1 (data)
     xor     a                               ;[c894] clear a
 label_c895:
