@@ -115,7 +115,7 @@ label_c0b4:
     call    $c0d1                           ;[c0c4] initialize timer ($e0)
     call    $c43f                           ;[c0c7] setup $c0 peripheral?
     call    $c108                           ;[c0ca] setup $b0 peripheral?
-    call    $c88d                           ;[c0cd] setup $a0/$80 peripheral?
+    call    $c88d                           ;[c0cd] setup CRTC ($a0) and do some stuff with bank switch? ($80)
     ret                                     ;[c0d0]
 
     ; SUBROUTINE C0D1; initialize timer (base ioaddr(0xE0))
@@ -1167,34 +1167,34 @@ label_c75d:
     jr      z,label_c75d                    ;[c761] 28 fa
     ret                                     ;[c763] c9
 
-    ; SUBROUTINE C764; CRTC TODO
-    ld      bc,$0780                        ;[c764] 01 80 07
-    push    ix                              ;[c767] dd e5
-    pop     hl                              ;[c769] e1
-    ld      de,$2000                        ;[c76a] 11 00 20
-    call    $c715                           ;[c76d] cd 15 c7
+    ; SUBROUTINE C764; CRTC TODO (ix: ...)
+    ld      bc,$0780                        ;[c764] 24*80 = "1920"
+    push    ix                              ;[c767]
+    pop     hl                              ;[c769] hl <- ix
+    ld      de,$2000                        ;[c76a]
+    call    $c715                           ;[c76d] hl <- current cursor position in video memory
 label_c770:
-    ld      (hl),d                          ;[c770] 72
-    in      a,($81)                         ;[c771] db 81
-    set     7,a                             ;[c773] cb ff
-    out     ($81),a                         ;[c775] d3 81
-    ld      (hl),e                          ;[c777] 73
-    res     7,a                             ;[c778] cb bf
-    out     ($81),a                         ;[c77a] d3 81
-    inc     hl                              ;[c77c] 23
-    bit     3,h                             ;[c77d] cb 5c
-    call    z,$c715                         ;[c77f] cc 15 c7
-    dec     bc                              ;[c782] 0b
-    ld      a,b                             ;[c783] 78
-    or      c                               ;[c784] b1
-    jr      nz,label_c770                   ;[c785] 20 e9
-    push    ix                              ;[c787] dd e5
-    pop     hl                              ;[c789] e1
-    call    $c71c                           ;[c78a] cd 1c c7
-    xor     a                               ;[c78d] af
-    ld      ($ffca),a                       ;[c78e] 32 ca ff
-    ld      ($ffcb),a                       ;[c791] 32 cb ff
-    ret                                     ;[c794] c9
+    ld      (hl),d                          ;[c770] write $20 in video memory: " "
+    in      a,($81)                         ;[c771] set MSB in $81
+    set     7,a                             ;[c773]
+    out     ($81),a                         ;[c775]
+    ld      (hl),e                          ;[c777] write 0 in bank switched video memory (?)
+    res     7,a                             ;[c778] reset MSB in $81
+    out     ($81),a                         ;[c77a]
+    inc     hl                              ;[c77c] move to next video memory address
+    bit     3,h                             ;[c77d] ???
+    call    z,$c715                         ;[c77f] ???
+    dec     bc                              ;[c782]
+    ld      a,b                             ;[c783]
+    or      c                               ;[c784]
+    jr      nz,label_c770                   ;[c785] repeat from $c770 while bc > 0
+    push    ix                              ;[c787]
+    pop     hl                              ;[c789] hl <- ix
+    call    $c71c                           ;[c78a]
+    xor     a                               ;[c78d]
+    ld      ($ffca),a                       ;[c78e] $ffca <- 0
+    ld      ($ffcb),a                       ;[c791] $ffcb <- 0
+    ret                                     ;[c794]
 
     push    af                              ;[c795] f5
     in      a,($81)                         ;[c796] db 81
@@ -1393,6 +1393,8 @@ label_c88b:
     ret                                     ;[c88c] c9
 
     ; SUBROUTINE C88D; CRTC initialization
+    ; return:
+    ; a = 0
     ld      hl,crtc_cfg_base                ;[c88d] CRTC configuration table addr
     ld      b,$10                           ;[c890] CRTC counter, $10 = # of entries in crtc_cfg table
     ld      c,$a1                           ;[c892] address CRTC with RS=1 (data)
@@ -1404,16 +1406,16 @@ label_c895:
     outi                                    ;[c898] output data in HL to CRTC register
     jr      nz,label_c895                   ;[c89a] loop while B!=0
     ;
-    ld      ix,$0000                        ;[c89c] dd 21 00 00
-    call    $c764                           ;[c8a0] cd 64 c7
-    call    $c8b6                           ;[c8a3] cd b6 c8
-    ld      hl,$0000                        ;[c8a6] 21 00 00
-    call    $c71c                           ;[c8a9] cd 1c c7
-    ld      a,($ffd1)                       ;[c8ac] 3a d1 ff
-    res     3,a                             ;[c8af] cb 9f
-    ld      ($ffd1),a                       ;[c8b1] 32 d1 ff
-    xor     a                               ;[c8b4] af
-    ret                                     ;[c8b5] c9
+    ld      ix,$0000                        ;[c89c] initialize ix (TODO)
+    call    $c764                           ;[c8a0] clear screen, initialize some variables
+    call    $c8b6                           ;[c8a3] configure display height to 24 lines instead of 25 (WTF?)
+    ld      hl,$0000                        ;[c8a6]
+    call    $c71c                           ;[c8a9] crtc_foo_c71c: initialize cursor position in CRTC registers
+    ld      a,($ffd1)                       ;[c8ac]
+    res     3,a                             ;[c8af]
+    ld      ($ffd1),a                       ;[c8b1] clear bit 3 in $ffd1
+    xor     a                               ;[c8b4] clear a when return
+    ret                                     ;[c8b5]
 
     ; SUBROUTINE C8B6; configure CRTC vertical displayed characters
     ld      a,$06                           ;[c8b6]
