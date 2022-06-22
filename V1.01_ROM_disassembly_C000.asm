@@ -39,8 +39,8 @@ label_c03b:
 
 label_c040:
     ld      sp,$0080                        ;[c040] setup stack pointer
-    call    $c0c2                           ;[c043]
-    call    $c6af                           ;[c046]
+    call    $c0c2                           ;[c043] initialize IO peripherals
+    call    $c6af                           ;[c046] initialize display management variables
     call    $c14e                           ;[c049]
     ld      a,$12                           ;[c04c]
     out     ($b2),a                         ;[c04e]
@@ -1026,49 +1026,50 @@ label_c6a3:
     pop     af                              ;[c6ad]
     ret                                     ;[c6ae]
 
-    ld      hl,$ffc9                        ;[c6af] 21 c9 ff
-    xor     a                               ;[c6b2] af
-    ld      (hl),a                          ;[c6b3] 77
-    inc     hl                              ;[c6b4] 23
-    ld      (hl),a                          ;[c6b5] 77
-    inc     hl                              ;[c6b6] 23
-    ld      (hl),a                          ;[c6b7] 77
-    inc     hl                              ;[c6b8] 23
-    ld      (hl),a                          ;[c6b9] 77
-    inc     hl                              ;[c6ba] 23
-    ld      (hl),$17                        ;[c6bb] 36 17
-    inc     hl                              ;[c6bd] 23
-    ld      (hl),a                          ;[c6be] 77
-    inc     hl                              ;[c6bf] 23
-    ld      (hl),$4f                        ;[c6c0] 36 4f
-    inc     hl                              ;[c6c2] 23
-    ld      (hl),a                          ;[c6c3] 77
-    inc     hl                              ;[c6c4] 23
-    ld      (hl),a                          ;[c6c5] 77
-    inc     hl                              ;[c6c6] 23
-    ld      (hl),$80                        ;[c6c7] 36 80
-    inc     hl                              ;[c6c9] 23
-    ld      a,($c86f)                       ;[c6ca] 3a 6f c8
-    ld      d,a                             ;[c6cd] 57
-    in      a,($d6)                         ;[c6ce] db d6
-    bit     5,a                             ;[c6d0] cb 6f
-    jr      z,label_c6d6                    ;[c6d2] 28 02
-    ld      d,$03                           ;[c6d4] 16 03
+    ; SUBROUTINE C6AF; display variables initialization
+    ld      hl,$ffc9                        ;[c6af]
+    xor     a                               ;[c6b2]
+    ld      (hl),a                          ;[c6b3] *$ffc9 = 0
+    inc     hl                              ;[c6b4]
+    ld      (hl),a                          ;[c6b5] *$ffca = 0
+    inc     hl                              ;[c6b6]
+    ld      (hl),a                          ;[c6b7] *$ffcb = 0
+    inc     hl                              ;[c6b8]
+    ld      (hl),a                          ;[c6b9] *$ffcc = 0
+    inc     hl                              ;[c6ba]
+    ld      (hl),$17                        ;[c6bb] *$ffce = "23" (rows(?)-1)
+    inc     hl                              ;[c6bd]
+    ld      (hl),a                          ;[c6be] *$ffcf = 0
+    inc     hl                              ;[c6bf]
+    ld      (hl),$4f                        ;[c6c0] *$ffd0 = "79" (columns-1)
+    inc     hl                              ;[c6c2]
+    ld      (hl),a                          ;[c6c3] *$ffd1 = 0
+    inc     hl                              ;[c6c4]
+    ld      (hl),a                          ;[c6c5] *$ffd2 = 0
+    inc     hl                              ;[c6c6]
+    ld      (hl),$80                        ;[c6c7] *$ffd3 = 0
+    inc     hl                              ;[c6c9]
+    ld      a,($c86f)                       ;[c6ca] a <- cursor data raster from crtc_cfg, "$0d"
+    ld      d,a                             ;[c6cd] d <- a
+    in      a,($d6)                         ;[c6ce]
+    bit     5,a                             ;[c6d0]
+    jr      z,label_c6d6                    ;[c6d2]
+    ld      d,$03                           ;[c6d4]
 label_c6d6:
-    bit     6,a                             ;[c6d6] cb 77
-    jr      z,label_c6de                    ;[c6d8] 28 04
-    set     5,d                             ;[c6da] cb ea
-    set     6,d                             ;[c6dc] cb f2
+    bit     6,a                             ;[c6d6]
+    jr      z,label_c6de                    ;[c6d8]
+    set     5,d                             ;[c6da]
+    set     6,d                             ;[c6dc]
 label_c6de:
-    ld      (hl),d                          ;[c6de] 72
-    xor     a                               ;[c6df] af
-    inc     hl                              ;[c6e0] 23
-    ld      b,$15                           ;[c6e1] 06 15
+    ld      (hl),d                          ;[c6de] *$ffd4 value is not prior known
+    xor     a                               ;[c6df] prepare registers for $c6e3 loop
+    inc     hl                              ;[c6e0]
+    ld      b,$15                           ;[c6e1]
 label_c6e3:
-    ld      (hl),a                          ;[c6e3] 77
-    inc     hl                              ;[c6e4] 23
-    djnz    label_c6e3                      ;[c6e5] 10 fc
-    ret                                     ;[c6e7] c9
+    ld      (hl),a                          ;[c6e3] write 0 in all memory in [$ffd5:$ffe9]
+    inc     hl                              ;[c6e4]
+    djnz    label_c6e3                      ;[c6e5]
+    ret                                     ;[c6e7]
 
     ld      ($ffd4),ix                      ;[c6e8] dd 22 d4 ff
     ld      ($ffd6),iy                      ;[c6ec] fd 22 d6 ff
