@@ -231,24 +231,38 @@ label_c144:
 label_c14a:
     pop     bc                              ;[c14a] c1
     dec     b                               ;[c14b] 05
-    jp      pe,$21ff                        ;[c14c] ea ff 21
-    ld      h,l                             ;[c14f] 65
-    pop     bc                              ;[c150] c1
-    ld      de,$0010                        ;[c151] 11 10 00
-    ld      bc,$000f                        ;[c154] 01 0f 00
-    ldir                                    ;[c157] ed b0
-    ld      hl,$0000                        ;[c159] 21 00 00
-    ld      de,$0000                        ;[c15c] 11 00 00
-    ld      bc,$0000                        ;[c15f] 01 00 00
-    jp      $0010                           ;[c162] c3 10 00
-    in      a,($81)                         ;[c165] db 81
-    set     0,a                             ;[c167] cb c7
-    out     ($81),a                         ;[c169] d3 81
-    ldir                                    ;[c16b] ed b0
-    res     0,a                             ;[c16d] cb 87
-    out     ($81),a                         ;[c16f] d3 81
-    out     ($de),a                         ;[c171] d3 de
-    ret                                     ;[c173] c9
+    jp      pe,$21ff                        ;[c14c] ea ff
+
+    ; SUBROUTINE C14E;
+    ; Loads a piece of code in RAM, then executes it
+    ld      hl,($c165)                      ;[c14e]
+    ld      de,$0010                        ;[c151]
+    ld      bc,$000f                        ;[c154]
+    ; LDIR: memcpy(de: dst, hl: src, bc: size)
+    ldir                                    ;[c157] copy code in [$c165:$c174] in [$0010:$000f]
+    ld      hl,$0000                        ;[c159]
+    ld      de,$0000                        ;[c15c]
+    ld      bc,$0000                        ;[c15f]
+    jp      $0010                           ;[c162] jump to just loaded code
+
+    ; This $c165/$0010 routine copies whole RAM content, from [$0000:$ffff],
+    ; into the same location. Appearently, it has no sense, but it is confirmed
+    ; by oscilloscope bus acquisitions.
+    ; Time lost by doing this: about 344ms.
+
+    ; this code is executed from [$0010:$000e]
+    ; arguments:
+    ; - hl: src
+    ; - de: dst
+    ; - bc: size
+    in      a,($81)                         ;[c165]/[0010] set bit 0 in $81
+    set     0,a                             ;[c167]/[0012]
+    out     ($81),a                         ;[c169]/[0014]
+    ldir                                    ;[c16b]/[0016] do the memcpy
+    res     0,a                             ;[c16d]/[0018] reset bit 0 in $81
+    out     ($81),a                         ;[c16f]/[001a]
+    out     ($de),a                         ;[c171]/[001c] and copy same value in $de
+    ret                                     ;[c173]/[001e]
 
     push    af                              ;[c174] f5
     rrca                                    ;[c175] 0f
