@@ -39,8 +39,8 @@ label_c03b:
 
 label_c040:
     ld      sp,$0080                        ;[c040] setup stack pointer
-    call    $c0c2                           ;[c043]
-    call    $c6af                           ;[c046]
+    call    $c0c2                           ;[c043] initialize IO peripherals
+    call    $c6af                           ;[c046] initialize display management variables
     call    $c14e                           ;[c049]
     ld      a,$12                           ;[c04c]
     out     ($b2),a                         ;[c04e]
@@ -115,7 +115,7 @@ label_c0b4:
     call    $c0d1                           ;[c0c4] initialize timer ($e0)
     call    $c43f                           ;[c0c7] setup $c0 peripheral?
     call    $c108                           ;[c0ca] setup $b0 peripheral?
-    call    $c88d                           ;[c0cd] setup $a0/$80 peripheral?
+    call    $c88d                           ;[c0cd] setup CRTC ($a0) and do some stuff with bank switch? ($80)
     ret                                     ;[c0d0]
 
     ; SUBROUTINE C0D1; initialize timer (base ioaddr(0xE0))
@@ -231,24 +231,38 @@ label_c144:
 label_c14a:
     pop     bc                              ;[c14a] c1
     dec     b                               ;[c14b] 05
-    jp      pe,$21ff                        ;[c14c] ea ff 21
-    ld      h,l                             ;[c14f] 65
-    pop     bc                              ;[c150] c1
-    ld      de,$0010                        ;[c151] 11 10 00
-    ld      bc,$000f                        ;[c154] 01 0f 00
-    ldir                                    ;[c157] ed b0
-    ld      hl,$0000                        ;[c159] 21 00 00
-    ld      de,$0000                        ;[c15c] 11 00 00
-    ld      bc,$0000                        ;[c15f] 01 00 00
-    jp      $0010                           ;[c162] c3 10 00
-    in      a,($81)                         ;[c165] db 81
-    set     0,a                             ;[c167] cb c7
-    out     ($81),a                         ;[c169] d3 81
-    ldir                                    ;[c16b] ed b0
-    res     0,a                             ;[c16d] cb 87
-    out     ($81),a                         ;[c16f] d3 81
-    out     ($de),a                         ;[c171] d3 de
-    ret                                     ;[c173] c9
+    jp      pe,$21ff                        ;[c14c] ea ff
+
+    ; SUBROUTINE C14E;
+    ; Loads a piece of code in RAM, then executes it
+    ld      hl,($c165)                      ;[c14e]
+    ld      de,$0010                        ;[c151]
+    ld      bc,$000f                        ;[c154]
+    ; LDIR: memcpy(de: dst, hl: src, bc: size)
+    ldir                                    ;[c157] copy code from [$c165:$c174] to [$0010:$000f]
+    ld      hl,$0000                        ;[c159]
+    ld      de,$0000                        ;[c15c]
+    ld      bc,$0000                        ;[c15f]
+    jp      $0010                           ;[c162] jump to just loaded code
+
+    ; This $c165/$0010 routine copies whole RAM content, from [$0000:$ffff],
+    ; into the same location. Apparently, it has no sense, but it is confirmed
+    ; by oscilloscope bus acquisitions.
+    ; Time lost by doing this: about 344ms.
+
+    ; this code is executed from [$0010:$000e]
+    ; arguments:
+    ; - hl: src
+    ; - de: dst
+    ; - bc: size
+    in      a,($81)                         ;[c165]/[0010] set bit 0 in $81
+    set     0,a                             ;[c167]/[0012]
+    out     ($81),a                         ;[c169]/[0014]
+    ldir                                    ;[c16b]/[0016] do the memcpy
+    res     0,a                             ;[c16d]/[0018] reset bit 0 in $81
+    out     ($81),a                         ;[c16f]/[001a]
+    out     ($de),a                         ;[c171]/[001c] and copy same value in $de
+    ret                                     ;[c173]/[001e]
 
     push    af                              ;[c174] f5
     rrca                                    ;[c175] 0f
@@ -679,93 +693,109 @@ label_c430:
     BYTE $6f
     BYTE $1b
 
-    ; SUBROUTINE C45E ; putchar()
+    ; SUBROUTINE C45E
+bios_putchar_c45e:
+    ; arguments:
+    ; - c: character to be printed
     push    af                              ;[c45e] save all registers
     push    bc                              ;[c45f]
     push    de                              ;[c460]
     push    hl                              ;[c461]
     push    ix                              ;[c462]
     push    iy                              ;[c464]
-    call    $c69a                           ;[c466]
+    call    $c69a                           ;[c466] load ix and iy (?? and cursor position)
+
     ld      a,($ffd8)                       ;[c469]
-    or      a                               ;[c46c] a == 0 ?
-    jp      nz,$c9e3                        ;[c46d]
+    or      a                               ;[c46c] if *$ffd8 != 0...
+    jp      nz,$c9e3                        ;[c46d] TODO
+
+    ; check if should override character switch behaviour
     ld      a,($ffcc)                       ;[c470]
-    cp      $ff                             ;[c473]
-    jp      z,$c6a3                         ;[c475]
-    or      a                               ;[c478]
-    jp      nz,label_c4be                   ;[c479]
+    cp      $ff                             ;[c473] if *$ffcc is == $ff...
+    jp      z,$c6a3                         ;[c475] treat c as NUL character
+    or      a                               ;[c478] if *$ffcc is != 0...
+    jp      nz,label_c4be                   ;[c479] print c even if is not a printable char
+
+    ; Character switch: handle not printable characters
     ld      a,c                             ;[c47c]
-    cp      $1b                             ;[c47d]
+    cp      $1b                             ;[c47d] jump if ESC
     jr      z,label_c4b6                    ;[c47f]
-    cp      $20                             ;[c481]
+    cp      $20                             ;[c481] jump if printable (>=' ')
     jp      nc,label_c4be                   ;[c483]
-    cp      $0d                             ;[c486]
+    cp      $0d                             ;[c486] jump if CR
     jp      z,label_c524                    ;[c488]
-    cp      $0a                             ;[c48b]
+    cp      $0a                             ;[c48b] jump if LF
     jp      z,label_c532                    ;[c48d]
-    cp      $0b                             ;[c490]
+    cp      $0b                             ;[c490] jump if TAB
     jp      z,label_c558                    ;[c492]
-    cp      $0c                             ;[c495]
+    cp      $0c                             ;[c495] jump if NewPage
     jp      z,label_c56f                    ;[c497]
-    cp      $08                             ;[c49a]
+    cp      $08                             ;[c49a] jump if Backspace
     jp      z,label_c59b                    ;[c49c]
-
-
-    cp      $1e                             ;[c49f]
+    cp      $1e                             ;[c49f] jump if RS
     jp      z,label_c5db                    ;[c4a1]
-    cp      $1a                             ;[c4a4]
+    cp      $1a                             ;[c4a4] jump if SUB
     jp      z,label_c5ee                    ;[c4a6]
-    cp      $07                             ;[c4a9]
+    cp      $07                             ;[c4a9] jump if BEL
     call    z,$c5f4                         ;[c4ab]
-    cp      $00                             ;[c4ae]
+    cp      $00                             ;[c4ae] jump if NUL
     jp      z,label_c6a3                    ;[c4b0]
-    jp      label_c4be                      ;[c4b3]
+    jp      label_c4be                      ;[c4b3] jump if any other not printable character
+
+    ; Handle ESC
 label_c4b6:
     ld      a,$01                           ;[c4b6]
     ld      ($ffd8),a                       ;[c4b8]
     jp      label_c6a3                      ;[c4bb]
+
+    ; Handle all, but special characters
 label_c4be:
     push    iy                              ;[c4be]
-    pop     hl                              ;[c4c0]
-    call    $c715                           ;[c4c1]
-    ld      (hl),c                          ;[c4c4]
-    call    $c795                           ;[c4c5]
+    pop     hl                              ;[c4c0] hl <- iy (copy of cursor position)
+    call    $c715                           ;[c4c1] compute cursor position in video memory
+    ld      (hl),c                          ;[c4c4] put character in $d000-$d7ff (video memory)
+    call    $c795                           ;[c4c5] set MSB in $81
     ld      a,($ffd1)                       ;[c4c8]
     ld      b,a                             ;[c4cb]
     ld      a,($ffd2)                       ;[c4cc]
-    and     (hl)                            ;[c4cf]
-    or      b                               ;[c4d0]
-    ld      (hl),a                          ;[c4d1]
-    call    $c79e                           ;[c4d2]
-    call    $c5f8                           ;[c4d5]
-    jr      c,label_c4e0                    ;[c4d8]
-    call    $c613                           ;[c4da]
-    jp      label_c6a3                      ;[c4dd]
+    and     (hl)                            ;[c4cf] a = *(0xffd2) & character in video memory
+    or      b                               ;[c4d0] a |= *(0xffd1)
+    ld      (hl),a                          ;[c4d1] write again in video memory
+    call    $c79e                           ;[c4d2] clear MSB in $81
+    call    $c5f8                           ;[c4d5] increment cursor column position
+    jr      c,label_c4e0                    ;[c4d8] if posx > "max column width", must do something else before the end
+    call    $c613                           ;[c4da] increments hl counter and update cursor position in CRTC
+    jp      label_c6a3                      ;[c4dd] the end, go to putchar epilogue
+
 label_c4e0:
-    ld      a,($ffcb)                       ;[c4e0]
+    ld      a,($ffcb)                       ;[c4e0] load current cursor posy?
     ld      b,a                             ;[c4e3]
-    ld      a,($ffcd)                       ;[c4e4]
+    ld      a,($ffcd)                       ;[c4e4] load "max rows height - 1"
     cp      b                               ;[c4e7]
-    jr      z,label_c501                    ;[c4e8]
-    inc     b                               ;[c4ea]
+    jr      z,label_c501                    ;[c4e8] jump if posy reached last row
+    inc     b                               ;[c4ea] increment cursor posy?
     ld      a,b                             ;[c4eb]
-    ld      ($ffcb),a                       ;[c4ec]
+    ld      ($ffcb),a                       ;[c4ec] save current cursor posy
     ld      a,($ffc9)                       ;[c4ef]
     or      a                               ;[c4f2]
-    jr      nz,label_c4fb                   ;[c4f3]
-    call    $c613                           ;[c4f5]
-    jp      label_c6a3                      ;[c4f8]
+    jr      nz,label_c4fb                   ;[c4f3] jump if *$ffc9 != 0
+    call    $c613                           ;[c4f5] increments hl counter and update cursor position in CRTC
+    jp      label_c6a3                      ;[c4f8] the end, go to putchar epilogue
+
+    ; SUBROUTINE 0xC4FB; called by c4e0 if *$ffc9 == 0
 label_c4fb:
     call    $c620                           ;[c4fb]
-    jp      label_c6a3                      ;[c4fe]
+    jp      label_c6a3                      ;[c4fe] the end, go to putchar epilogue
+
+    ; SUBROUTINE 0xC501; called by c4e0 if posy reached last row
 label_c501:
     ld      a,($ffc9)                       ;[c501]
     or      a                               ;[c504]
     jr      nz,label_c510                   ;[c505]
     call    $c613                           ;[c507]
     call    $c62e                           ;[c50a]
-    jp      label_c6a3                      ;[c50d]
+    jp      label_c6a3                      ;[c50d] the end, go to putchar epilogue
+
 label_c510:
     ld      a,($ffcd)                       ;[c510]
     ld      b,a                             ;[c513]
@@ -894,31 +924,35 @@ label_c5ee:
     out     ($da),a                         ;[c5f5]
     ret                                     ;[c5f7]
 
-    ld      a,($ffca)                       ;[c5f8] 3a ca ff
-    ld      c,a                             ;[c5fb] 4f
-    inc     c                               ;[c5fc] 0c
-    ld      a,($ffd1)                       ;[c5fd] 3a d1 ff
-    bit     3,a                             ;[c600] cb 5f
-    jr      z,label_c605                    ;[c602] 28 01
-    inc     c                               ;[c604] 0c
+    ; SUBROUTINE 0xC5F8
+    ; this subroutine seems to handle the column/line cursor position.
+    ; to be verified
+    ld      a,($ffca)                       ;[c5f8] load cursor posx
+    ld      c,a                             ;[c5fb]
+    inc     c                               ;[c5fc] increment posx by one
+    ld      a,($ffd1)                       ;[c5fd]
+    bit     3,a                             ;[c600]
+    jr      z,label_c605                    ;[c602] if bit 3 of $ffd1 is set...
+    inc     c                               ;[c604] do another increment on posx
 label_c605:
-    ld      a,($ffcf)                       ;[c605] 3a cf ff
-    cp      c                               ;[c608] b9
-    ld      a,c                             ;[c609] 79
-    jr      nc,label_c60f                   ;[c60a] 30 03
-    ld      a,($ffd0)                       ;[c60c] 3a d0 ff
+    ld      a,($ffcf)                       ;[c605] load "maximum column width - 1" value
+    cp      c                               ;[c608]
+    ld      a,c                             ;[c609]
+    jr      nc,label_c60f                   ;[c60a] if posx > *$ffcf...
+    ld      a,($ffd0)                       ;[c60c] put posx to "column 0"
 label_c60f:
-    ld      ($ffca),a                       ;[c60f] 32 ca ff
-    ret                                     ;[c612] c9
+    ld      ($ffca),a                       ;[c60f] save new posx
+    ret                                     ;[c612]
 
-    inc     hl                              ;[c613] 23
-    ld      a,($ffd1)                       ;[c614] 3a d1 ff
-    bit     3,a                             ;[c617] cb 5f
-    jr      z,label_c61c                    ;[c619] 28 01
-    inc     hl                              ;[c61b] 23
+    ; SUBROUTINE $C613
+    inc     hl                              ;[c613] increment hl by one
+    ld      a,($ffd1)                       ;[c614]
+    bit     3,a                             ;[c617]
+    jr      z,label_c61c                    ;[c619] if bit 3 of $ffd1 is set...
+    inc     hl                              ;[c61b] do another increment on hl
 label_c61c:
-    call    $c71c                           ;[c61c] cd 1c c7
-    ret                                     ;[c61f] c9
+    call    crtc_foo_c71c                   ;[c61c] crtc_foo_c71c(hl, ix)
+    ret                                     ;[c61f]
 
     ld      a,($ffc8)                       ;[c620] 3a c8 ff
     ld      e,a                             ;[c623] 5f
@@ -992,63 +1026,64 @@ label_c690:
     ret                                     ;[c699] c9
 
     ; SUBROUTINE C69A ; load cursor position (?)
-    ld      ix,($ffd4)                      ;[c69a] dd 2a d4 ff
-    ld      iy,($ffd6)                      ;[c69e] fd 2a d6 ff
-    ret                                     ;[c6a2] c9
+    ld      ix,($ffd4)                      ;[c69a]
+    ld      iy,($ffd6)                      ;[c69e] Load current cursor position as in CRTC R14:R15 registers
+    ret                                     ;[c6a2]
 
 label_c6a3:
-    call    $c6e8                           ;[c6a3] cd e8 c6
-    pop     iy                              ;[c6a6] fd e1
-    pop     ix                              ;[c6a8] dd e1
-    pop     hl                              ;[c6aa] e1
-    pop     de                              ;[c6ab] d1
-    pop     bc                              ;[c6ac] c1
-    pop     af                              ;[c6ad] f1
-    ret                                     ;[c6ae] c9
+    call    $c6e8                           ;[c6a3] save ix and iy in memory
+    pop     iy                              ;[c6a6] function epilogue
+    pop     ix                              ;[c6a8]
+    pop     hl                              ;[c6aa]
+    pop     de                              ;[c6ab]
+    pop     bc                              ;[c6ac]
+    pop     af                              ;[c6ad]
+    ret                                     ;[c6ae]
 
-    ld      hl,$ffc9                        ;[c6af] 21 c9 ff
-    xor     a                               ;[c6b2] af
-    ld      (hl),a                          ;[c6b3] 77
-    inc     hl                              ;[c6b4] 23
-    ld      (hl),a                          ;[c6b5] 77
-    inc     hl                              ;[c6b6] 23
-    ld      (hl),a                          ;[c6b7] 77
-    inc     hl                              ;[c6b8] 23
-    ld      (hl),a                          ;[c6b9] 77
-    inc     hl                              ;[c6ba] 23
-    ld      (hl),$17                        ;[c6bb] 36 17
-    inc     hl                              ;[c6bd] 23
-    ld      (hl),a                          ;[c6be] 77
-    inc     hl                              ;[c6bf] 23
-    ld      (hl),$4f                        ;[c6c0] 36 4f
-    inc     hl                              ;[c6c2] 23
-    ld      (hl),a                          ;[c6c3] 77
-    inc     hl                              ;[c6c4] 23
-    ld      (hl),a                          ;[c6c5] 77
-    inc     hl                              ;[c6c6] 23
-    ld      (hl),$80                        ;[c6c7] 36 80
-    inc     hl                              ;[c6c9] 23
-    ld      a,($c86f)                       ;[c6ca] 3a 6f c8
-    ld      d,a                             ;[c6cd] 57
-    in      a,($d6)                         ;[c6ce] db d6
-    bit     5,a                             ;[c6d0] cb 6f
-    jr      z,label_c6d6                    ;[c6d2] 28 02
-    ld      d,$03                           ;[c6d4] 16 03
+    ; SUBROUTINE C6AF; display variables initialization
+    ld      hl,$ffc9                        ;[c6af]
+    xor     a                               ;[c6b2]
+    ld      (hl),a                          ;[c6b3] *$ffc9 = 0
+    inc     hl                              ;[c6b4]
+    ld      (hl),a                          ;[c6b5] *$ffca = 0
+    inc     hl                              ;[c6b6]
+    ld      (hl),a                          ;[c6b7] *$ffcb = 0
+    inc     hl                              ;[c6b8]
+    ld      (hl),a                          ;[c6b9] *$ffcc = 0
+    inc     hl                              ;[c6ba]
+    ld      (hl),$17                        ;[c6bb] *$ffce = "23" (rows(?)-1)
+    inc     hl                              ;[c6bd]
+    ld      (hl),a                          ;[c6be] *$ffcf = 0
+    inc     hl                              ;[c6bf]
+    ld      (hl),$4f                        ;[c6c0] *$ffd0 = "79" (columns-1)
+    inc     hl                              ;[c6c2]
+    ld      (hl),a                          ;[c6c3] *$ffd1 = 0
+    inc     hl                              ;[c6c4]
+    ld      (hl),a                          ;[c6c5] *$ffd2 = 0
+    inc     hl                              ;[c6c6]
+    ld      (hl),$80                        ;[c6c7] *$ffd3 = 0
+    inc     hl                              ;[c6c9]
+    ld      a,($c86f)                       ;[c6ca] a <- cursor data raster from crtc_cfg, "$0d"
+    ld      d,a                             ;[c6cd] d <- a
+    in      a,($d6)                         ;[c6ce]
+    bit     5,a                             ;[c6d0]
+    jr      z,label_c6d6                    ;[c6d2]
+    ld      d,$03                           ;[c6d4]
 label_c6d6:
-    bit     6,a                             ;[c6d6] cb 77
-    jr      z,label_c6de                    ;[c6d8] 28 04
-    set     5,d                             ;[c6da] cb ea
-    set     6,d                             ;[c6dc] cb f2
+    bit     6,a                             ;[c6d6]
+    jr      z,label_c6de                    ;[c6d8]
+    set     5,d                             ;[c6da]
+    set     6,d                             ;[c6dc]
 label_c6de:
-    ld      (hl),d                          ;[c6de] 72
-    xor     a                               ;[c6df] af
-    inc     hl                              ;[c6e0] 23
-    ld      b,$15                           ;[c6e1] 06 15
+    ld      (hl),d                          ;[c6de] *$ffd4 value is not prior known
+    xor     a                               ;[c6df] prepare registers for $c6e3 loop
+    inc     hl                              ;[c6e0]
+    ld      b,$15                           ;[c6e1]
 label_c6e3:
-    ld      (hl),a                          ;[c6e3] 77
-    inc     hl                              ;[c6e4] 23
-    djnz    label_c6e3                      ;[c6e5] 10 fc
-    ret                                     ;[c6e7] c9
+    ld      (hl),a                          ;[c6e3] write 0 in all memory in [$ffd5:$ffe9]
+    inc     hl                              ;[c6e4]
+    djnz    label_c6e3                      ;[c6e5]
+    ret                                     ;[c6e7]
 
     ld      ($ffd4),ix                      ;[c6e8] dd 22 d4 ff
     ld      ($ffd6),iy                      ;[c6ec] fd 22 d6 ff
@@ -1083,37 +1118,46 @@ label_c701:
     pop     af                              ;[c713] f1
     ret                                     ;[c714] c9
 
-    ld      a,h                             ;[c715] 7c
-    and     $07                             ;[c716] e6 07
-    or      $d0                             ;[c718] f6 d0
-    ld      h,a                             ;[c71a] 67
-    ret                                     ;[c71b] c9
+    ; SUBROUTINE 0xC715; compute current video memory pointer from current cursor
+    ; arguments:
+    ; - hl: cursor position
+    ; return:
+    ; - hl: video memory pointer
+    ; Memento: video memory is mapped to 0xd000:0xd7ff
+    ld      a,h                             ;[c715]
+    and     $07                             ;[c716] hl &= 0x07ff
+    or      $d0                             ;[c718] hl += 0xd000
+    ld      h,a                             ;[c71a]
+    ret                                     ;[c71b]
 
-    ld      a,h                             ;[c71c] 7c
-    and     $07                             ;[c71d] e6 07
-    ld      h,a                             ;[c71f] 67
-    push    ix                              ;[c720] dd e5
-    pop     de                              ;[c722] d1
-    ex      de,hl                           ;[c723] eb
-    or      a                               ;[c724] b7
-    sbc     hl,de                           ;[c725] ed 52
-    jr      c,label_c730                    ;[c727] 38 07
-    jr      z,label_c730                    ;[c729] 28 05
-    ld      hl,$0800                        ;[c72b] 21 00 08
-    add     hl,de                           ;[c72e] 19
-    ex      de,hl                           ;[c72f] eb
+    ; SUBROUTINE C71C; CRTC TODO; crtc_foo_c71c(hl: value, ix)
+crtc_foo_c71c:
+    ld      a,h                             ;[c71c]
+    and     $07                             ;[c71d]
+    ld      h,a                             ;[c71f] value &= 0x07FF
+    push    ix                              ;[c720]
+    pop     de                              ;[c722]
+    ex      de,hl                           ;[c723] de <- value; hl <- ix
+    or      a                               ;[c724] clear carry
+    sbc     hl,de                           ;[c725] hl <- ix - value
+    jr      c,label_c730                    ;[c727] skip next if ix <= value
+    jr      z,label_c730                    ;[c729]
+    ld      hl,$0800                        ;[c72b]
+    add     hl,de                           ;[c72e] hl <- $0800 + value
+    ex      de,hl                           ;[c72f] de <- $0800 + value; hl <- $0800
 label_c730:
-    ld      a,$0e                           ;[c730] 3e 0e
-    out     ($a0),a                         ;[c732] d3 a0
-    ld      a,d                             ;[c734] 7a
-    out     ($a1),a                         ;[c735] d3 a1
-    ld      a,$0f                           ;[c737] 3e 0f
-    out     ($a0),a                         ;[c739] d3 a0
-    ld      a,e                             ;[c73b] 7b
-    out     ($a1),a                         ;[c73c] d3 a1
-    push    de                              ;[c73e] d5
-    pop     iy                              ;[c73f] fd e1
-    ret                                     ;[c741] c9
+    ; Write cursor position, that is value or ($0800 + value)
+    ld      a,$0e                           ;[c730] CRTC R14: cursor position HI
+    out     ($a0),a                         ;[c732]
+    ld      a,d                             ;[c734]
+    out     ($a1),a                         ;[c735]
+    ld      a,$0f                           ;[c737] CRTC R15: cursor position LO
+    out     ($a0),a                         ;[c739]
+    ld      a,e                             ;[c73b]
+    out     ($a1),a                         ;[c73c]
+    push    de                              ;[c73e]
+    pop     iy                              ;[c73f] iy <- value or $0800 + value
+    ret                                     ;[c741]
 
     ld      a,h                             ;[c742] 7c
     and     $07                             ;[c743] e6 07
@@ -1138,33 +1182,34 @@ label_c75d:
     jr      z,label_c75d                    ;[c761] 28 fa
     ret                                     ;[c763] c9
 
-    ld      bc,$0780                        ;[c764] 01 80 07
-    push    ix                              ;[c767] dd e5
-    pop     hl                              ;[c769] e1
-    ld      de,$2000                        ;[c76a] 11 00 20
-    call    $c715                           ;[c76d] cd 15 c7
+    ; SUBROUTINE C764; CRTC TODO (ix: ...)
+    ld      bc,$0780                        ;[c764] 24*80 = "1920"
+    push    ix                              ;[c767]
+    pop     hl                              ;[c769] hl <- ix
+    ld      de,$2000                        ;[c76a]
+    call    $c715                           ;[c76d] hl <- current cursor position in video memory
 label_c770:
-    ld      (hl),d                          ;[c770] 72
-    in      a,($81)                         ;[c771] db 81
-    set     7,a                             ;[c773] cb ff
-    out     ($81),a                         ;[c775] d3 81
-    ld      (hl),e                          ;[c777] 73
-    res     7,a                             ;[c778] cb bf
-    out     ($81),a                         ;[c77a] d3 81
-    inc     hl                              ;[c77c] 23
-    bit     3,h                             ;[c77d] cb 5c
-    call    z,$c715                         ;[c77f] cc 15 c7
-    dec     bc                              ;[c782] 0b
-    ld      a,b                             ;[c783] 78
-    or      c                               ;[c784] b1
-    jr      nz,label_c770                   ;[c785] 20 e9
-    push    ix                              ;[c787] dd e5
-    pop     hl                              ;[c789] e1
-    call    $c71c                           ;[c78a] cd 1c c7
-    xor     a                               ;[c78d] af
-    ld      ($ffca),a                       ;[c78e] 32 ca ff
-    ld      ($ffcb),a                       ;[c791] 32 cb ff
-    ret                                     ;[c794] c9
+    ld      (hl),d                          ;[c770] write $20 in video memory: " "
+    in      a,($81)                         ;[c771] set MSB in $81
+    set     7,a                             ;[c773]
+    out     ($81),a                         ;[c775]
+    ld      (hl),e                          ;[c777] write 0 in bank switched video memory (?)
+    res     7,a                             ;[c778] reset MSB in $81
+    out     ($81),a                         ;[c77a]
+    inc     hl                              ;[c77c] move to next video memory address
+    bit     3,h                             ;[c77d] ???
+    call    z,$c715                         ;[c77f] ???
+    dec     bc                              ;[c782]
+    ld      a,b                             ;[c783]
+    or      c                               ;[c784]
+    jr      nz,label_c770                   ;[c785] repeat from $c770 while bc > 0
+    push    ix                              ;[c787]
+    pop     hl                              ;[c789] hl <- ix
+    call    $c71c                           ;[c78a]
+    xor     a                               ;[c78d]
+    ld      ($ffca),a                       ;[c78e] $ffca <- 0
+    ld      ($ffcb),a                       ;[c791] $ffcb <- 0
+    ret                                     ;[c794]
 
     push    af                              ;[c795] f5
     in      a,($81)                         ;[c796] db 81
@@ -1311,21 +1356,42 @@ label_c845:
     pop     bc                              ;[c863] c1
     ret                                     ;[c864] c9
 
-    ld      h,e                             ;[c865] 63
-    ld      d,b                             ;[c866] 50
-    ld      d,h                             ;[c867] 54
-    xor     d                               ;[c868] aa
-    add     hl,de                           ;[c869] 19
-    ld      b,$19                           ;[c86a] 06 19
-    add     hl,de                           ;[c86c] 19
-    nop                                     ;[c86d] 00
-    dec     c                               ;[c86e] 0d
-    dec     c                               ;[c86f] 0d
-    dec     c                               ;[c870] 0d
-    nop                                     ;[c871] 00
-    nop                                     ;[c872] 00
-    nop                                     ;[c873] 00
-    nop                                     ;[c874] 00
+    ; CRTC Configuration Table
+crtc_cfg_base:
+    ; R0  Horizontal total character - 1 ; 100 - 1 = "99"
+    BYTE $63                                ;[c865]
+    ; R1  Horizontal disp character "80"
+    BYTE $50                                ;[c866]
+    ; R2  Horizontal sync pulse position
+    BYTE $54                                ;[c867]
+    ; R3  Horizontal sync pulse length
+    BYTE $aa                                ;[c868]
+    ; R4  Vertical total character
+    BYTE $19                                ;[c869]
+    ; R5  Total raster adjust
+    BYTE $06                                ;[c86a]
+    ; R6  Vertical displayed characters
+    BYTE $19                                ;[c86b]
+    ; R7  Vertical sync pulse position
+    BYTE $19                                ;[c86c]
+    ; R8  Interlaced mode (not interlaced)
+    BYTE $00                                ;[c86d]
+    ; R9  Maximum raster (?)
+    BYTE $0d                                ;[c86e]
+    ; R10 Cursor start raster
+    BYTE $0d                                ;[c86f]
+    ; R11 Cursor end raster
+    BYTE $0d                                ;[c870]
+    ; R12 Start address HI
+    BYTE $00                                ;[c871]
+    ; R13 Start address LO
+    BYTE $00                                ;[c872]
+    ; R14 Cursor HI
+    BYTE $00                                ;[c873]
+    ; R15 Cursor LO
+    BYTE $00                                ;[c874]
+
+
     ld      a,($ffd1)                       ;[c875] 3a d1 ff
     set     3,a                             ;[c878] cb df
     ld      ($ffd1),a                       ;[c87a] 32 d1 ff
@@ -1341,31 +1407,37 @@ label_c88b:
     xor     a                               ;[c88b] af
     ret                                     ;[c88c] c9
 
-    ld      hl,$c865                        ;[c88d] 21 65 c8
-    ld      b,$10                           ;[c890] 06 10
-    ld      c,$a1                           ;[c892] 0e a1
-    xor     a                               ;[c894] af
+    ; SUBROUTINE C88D; CRTC initialization
+    ; return:
+    ; a = 0
+    ld      hl,crtc_cfg_base                ;[c88d] CRTC configuration table addr
+    ld      b,$10                           ;[c890] CRTC counter, $10 = # of entries in crtc_cfg table
+    ld      c,$a1                           ;[c892] address CRTC with RS=1 (data)
+    xor     a                               ;[c894] clear a
 label_c895:
-    out     ($a0),a                         ;[c895] d3 a0
-    inc     a                               ;[c897] 3c
-    outi                                    ;[c898] ed a3
-    jr      nz,label_c895                   ;[c89a] 20 f9
-    ld      ix,$0000                        ;[c89c] dd 21 00 00
-    call    $c764                           ;[c8a0] cd 64 c7
-    call    $c8b6                           ;[c8a3] cd b6 c8
-    ld      hl,$0000                        ;[c8a6] 21 00 00
-    call    $c71c                           ;[c8a9] cd 1c c7
-    ld      a,($ffd1)                       ;[c8ac] 3a d1 ff
-    res     3,a                             ;[c8af] cb 9f
-    ld      ($ffd1),a                       ;[c8b1] 32 d1 ff
-    xor     a                               ;[c8b4] af
-    ret                                     ;[c8b5] c9
+    out     ($a0),a                         ;[c895] set CRTC internal register address to A (RS=0)
+    inc     a                               ;[c897] move to next address
+    ; OUTI: outputs (HL++) to port in C, then decrements B and sets Z if B=0
+    outi                                    ;[c898] output data in HL to CRTC register
+    jr      nz,label_c895                   ;[c89a] loop while B!=0
+    ;
+    ld      ix,$0000                        ;[c89c] initialize ix (TODO)
+    call    $c764                           ;[c8a0] clear screen, initialize some variables
+    call    $c8b6                           ;[c8a3] configure display height to 24 lines instead of 25 (WTF?)
+    ld      hl,$0000                        ;[c8a6]
+    call    $c71c                           ;[c8a9] crtc_foo_c71c: initialize cursor position in CRTC registers
+    ld      a,($ffd1)                       ;[c8ac]
+    res     3,a                             ;[c8af]
+    ld      ($ffd1),a                       ;[c8b1] clear bit 3 in $ffd1
+    xor     a                               ;[c8b4] clear a when return
+    ret                                     ;[c8b5]
 
-    ld      a,$06                           ;[c8b6] 3e 06
-    out     ($a0),a                         ;[c8b8] d3 a0
-    ld      a,$18                           ;[c8ba] 3e 18
-    out     ($a1),a                         ;[c8bc] d3 a1
-    ret                                     ;[c8be] c9
+    ; SUBROUTINE C8B6; configure CRTC vertical displayed characters
+    ld      a,$06                           ;[c8b6]
+    out     ($a0),a                         ;[c8b8] Select R6 CRTC register
+    ld      a,$18                           ;[c8ba]
+    out     ($a1),a                         ;[c8bc] Set 24 character lines
+    ret                                     ;[c8be]
 
     xor     a                               ;[c8bf] af
     ld      ($ffce),a                       ;[c8c0] 32 ce ff
@@ -2743,3 +2815,4 @@ label_cdb5:
     BYTE $31
 
     ; In the original ROM, here starts a perfect replica of all the above program.
+    ; Except for the "splash screen", which is $31 $2e $30 $ff
