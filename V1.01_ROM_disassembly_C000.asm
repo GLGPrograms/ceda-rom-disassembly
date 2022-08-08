@@ -239,14 +239,14 @@ label_c14a:
     ld      de,$0010                        ;[c151]
     ld      bc,$000f                        ;[c154]
     ; LDIR: memcpy(de: dst, hl: src, bc: size)
-    ldir                                    ;[c157] copy code in [$c165:$c174] in [$0010:$000f]
+    ldir                                    ;[c157] copy code from [$c165:$c174] to [$0010:$000f]
     ld      hl,$0000                        ;[c159]
     ld      de,$0000                        ;[c15c]
     ld      bc,$0000                        ;[c15f]
     jp      $0010                           ;[c162] jump to just loaded code
 
     ; This $c165/$0010 routine copies whole RAM content, from [$0000:$ffff],
-    ; into the same location. Appearently, it has no sense, but it is confirmed
+    ; into the same location. Apparently, it has no sense, but it is confirmed
     ; by oscilloscope bus acquisitions.
     ; Time lost by doing this: about 344ms.
 
