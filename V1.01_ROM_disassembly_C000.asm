@@ -745,14 +745,14 @@ bios_putchar_c45e:
     cp      $07                             ;[c4a9] jump if BEL
     call    z,$c5f4                         ;[c4ab]
     cp      $00                             ;[c4ae] jump if NUL
-    jp      z,label_c6a3                    ;[c4b0]
+    jp      z,label_c6a3                    ;[c4b0] ... aka the end, go to putchar epilogue
     jp      label_c4be                      ;[c4b3] jump if any other not printable character
 
-    ; Handle ESC
+    ; SUBROUTINE C4B6; putchar(ESC)
 label_c4b6:
     ld      a,$01                           ;[c4b6]
-    ld      ($ffd8),a                       ;[c4b8]
-    jp      label_c6a3                      ;[c4bb]
+    ld      ($ffd8),a                       ;[c4b8] *$ffd8 = 0x01
+    jp      label_c6a3                      ;[c4bb] the end, go to putchar epilogue
 
     ; Handle all, but special characters
 label_c4be:
@@ -811,27 +811,31 @@ label_c510:
     call    $c71c                           ;[c51b]
     call    $c62e                           ;[c51e]
     jp      label_c6a3                      ;[c521]
+
+    ; SUBROUTINE C524; putchar(CR)
 label_c524:
-    ld      a,($ffd0)                       ;[c524]
-    ld      ($ffca),a                       ;[c527]
+    ld      a,($ffd0)                       ;[c524] load value of first column
+    ld      ($ffca),a                       ;[c527] and update posx with it
     ld      c,a                             ;[c52a]
-    ld      a,($ffcb)                       ;[c52b]
+    ld      a,($ffcb)                       ;[c52b] load posy
     ld      b,a                             ;[c52e]
     jp      label_c5e5                      ;[c52f]
+
+    ; SUBROUTINE C532; putchar(LF)
 label_c532:
-    ld      a,($ffcb)                       ;[c532]
+    ld      a,($ffcb)                       ;[c532] load cursor posy
     ld      b,a                             ;[c535]
-    ld      a,($ffcd)                       ;[c536]
+    ld      a,($ffcd)                       ;[c536] load max lines-1
     cp      b                               ;[c539]
-    jr      z,label_c54b                    ;[c53a]
+    jr      z,label_c54b                    ;[c53a] jump posy == last line
     inc     b                               ;[c53c]
     ld      a,b                             ;[c53d]
-    ld      ($ffcb),a                       ;[c53e]
+    ld      ($ffcb),a                       ;[c53e] update current posy
 label_c541:
     push    iy                              ;[c541]
-    pop     hl                              ;[c543]
+    pop     hl                              ;[c543] hl <- iy
     ld      de,$0050                        ;[c544]
-    add     hl,de                           ;[c547]
+    add     hl,de                           ;[c547] add 80 columns to character video memory pointer
     jp      label_c5e8                      ;[c548]
 label_c54b:
     call    $c62e                           ;[c54b]
@@ -840,24 +844,28 @@ label_c54b:
     ld      a,($ffca)                       ;[c552]
     ld      c,a                             ;[c555]
     jr      label_c541                      ;[c556]
+
+    ; SUBROUTINE C558; putchar(TAB)
 label_c558:
-    ld      a,($ffcb)                       ;[c558]
+    ld      a,($ffcb)                       ;[c558] load posy
     ld      b,a                             ;[c55b]
-    ld      a,($ffce)                       ;[c55c]
-    cp      b                               ;[c55f]
-    jp      z,label_c6a3                    ;[c560]
+    ld      a,($ffce)                       ;[c55c] load next tab stop position
+    cp      b                               ;[c55f] if already in next tab stop position, do nothing
+    jp      z,label_c6a3                    ;[c560] the end, go to putchar epilogue
     dec     b                               ;[c563]
     ld      a,b                             ;[c564]
-    ld      ($ffcb),a                       ;[c565]
+    ld      ($ffcb),a                       ;[c565] update posx moving cursor to next tab stop
     ld      a,($ffca)                       ;[c568]
     ld      c,a                             ;[c56b]
     jp      label_c5e5                      ;[c56c]
+
 label_c56f:
     call    $c5f8                           ;[c56f]
     ld      a,($ffcb)                       ;[c572]
     ld      b,a                             ;[c575]
     jr      c,label_c57b                    ;[c576]
     jp      label_c5e5                      ;[c578]
+
 label_c57b:
     ld      a,($ffd0)                       ;[c57b]
     ld      ($ffca),a                       ;[c57e]
@@ -876,23 +884,26 @@ label_c594:
     call    $c62e                           ;[c595]
     pop     bc                              ;[c598]
     jr      label_c5e5                      ;[c599]
+
+    ; SUBROUTINE C59B; putchar(Backspace)
 label_c59b:
-    ld      a,($ffca)                       ;[c59b]
+    ld      a,($ffca)                       ;[c59b] load posx
     ld      c,a                             ;[c59e]
-    ld      a,($ffd0)                       ;[c59f]
+    ld      a,($ffd0)                       ;[c59f] load column 0 position
     cp      c                               ;[c5a2]
-    jr      z,label_c5b8                    ;[c5a3]
-    dec     c                               ;[c5a5]
+    jr      z,label_c5b8                    ;[c5a3] jump if posx == first column
+    dec     c                               ;[c5a5] move cursor backwards
     ld      a,($ffd1)                       ;[c5a6]
     bit     3,a                             ;[c5a9]
     jr      z,label_c5ae                    ;[c5ab]
-    dec     c                               ;[c5ad]
+    dec     c                               ;[c5ad] if bit 3 of $ffd1 set, double cursor movement
 label_c5ae:
     ld      a,c                             ;[c5ae]
-    ld      ($ffca),a                       ;[c5af]
+    ld      ($ffca),a                       ;[c5af] update posx
     ld      a,($ffcb)                       ;[c5b2]
-    ld      b,a                             ;[c5b5]
+    ld      b,a                             ;[c5b5] prepare posy in b
     jr      label_c5e5                      ;[c5b6]
+
 label_c5b8:
     ld      a,($ffcf)                       ;[c5b8]
     ld      b,a                             ;[c5bb]
@@ -913,21 +924,27 @@ label_c5c4:
     ld      a,b                             ;[c5d5]
     ld      ($ffcb),a                       ;[c5d6]
     jr      label_c5e5                      ;[c5d9]
+
+    ; SUBROUTINE C5DB; putchar(RS), go home cursor, you're drunk
 label_c5db:
     xor     a                               ;[c5db]
-    ld      ($ffcb),a                       ;[c5dc]
+    ld      ($ffcb),a                       ;[c5dc] load 0 in posx, posy
     ld      ($ffca),a                       ;[c5df]
-    ld      bc,$0000                        ;[c5e2]
+    ld      bc,$0000                        ;[c5e2] prepare 0 in bc
 label_c5e5:
     call    $c6f1                           ;[c5e5]
 label_c5e8:
     call    $c71c                           ;[c5e8]
-    jp      label_c6a3                      ;[c5eb]
+    jp      label_c6a3                      ;[c5eb] the end, go to putchar epilogue
+
+    ; SUBROUTINE C5EE; putchar(SUB)
 label_c5ee:
     call    $c764                           ;[c5ee]
-    jp      label_c6a3                      ;[c5f1]
-    xor     a                               ;[c5f4]
-    out     ($da),a                         ;[c5f5]
+    jp      label_c6a3                      ;[c5f1] the end, go to putchar epilogue
+
+    ; SUBROUTINE C5F4; putchar(BEL)
+    xor     a                               ;[c5f4] Make buzzer beep...
+    out     ($da),a                         ;[c5f5] ...if ASCII is not an opinion
     ret                                     ;[c5f7]
 
     ; SUBROUTINE 0xC5F8
@@ -1057,17 +1074,17 @@ label_c6a3:
     inc     hl                              ;[c6b8]
     ld      (hl),a                          ;[c6b9] *$ffcc = 0
     inc     hl                              ;[c6ba]
-    ld      (hl),$17                        ;[c6bb] *$ffce = "23" (rows(?)-1)
+    ld      (hl),$17                        ;[c6bb] *$ffcd = "23" (rows(?)-1)
     inc     hl                              ;[c6bd]
-    ld      (hl),a                          ;[c6be] *$ffcf = 0
+    ld      (hl),a                          ;[c6be] *$ffce = 0
     inc     hl                              ;[c6bf]
-    ld      (hl),$4f                        ;[c6c0] *$ffd0 = "79" (columns-1)
+    ld      (hl),$4f                        ;[c6c0] *$ffcf = "79" (columns-1)
     inc     hl                              ;[c6c2]
-    ld      (hl),a                          ;[c6c3] *$ffd1 = 0
+    ld      (hl),a                          ;[c6c3] *$ffd0 = 0
     inc     hl                              ;[c6c4]
-    ld      (hl),a                          ;[c6c5] *$ffd2 = 0
+    ld      (hl),a                          ;[c6c5] *$ffd1 = 0
     inc     hl                              ;[c6c6]
-    ld      (hl),$80                        ;[c6c7] *$ffd3 = 0
+    ld      (hl),$80                        ;[c6c7] *$ffd2 = 0
     inc     hl                              ;[c6c9]
     ld      a,($c86f)                       ;[c6ca] a <- cursor data raster from crtc_cfg, "$0d"
     ld      d,a                             ;[c6cd] d <- a
@@ -1081,12 +1098,12 @@ label_c6d6:
     set     5,d                             ;[c6da]
     set     6,d                             ;[c6dc]
 label_c6de:
-    ld      (hl),d                          ;[c6de] *$ffd4 value is not prior known
+    ld      (hl),d                          ;[c6de] *$ffd3 value is not prior known
     xor     a                               ;[c6df] prepare registers for $c6e3 loop
     inc     hl                              ;[c6e0]
     ld      b,$15                           ;[c6e1]
 label_c6e3:
-    ld      (hl),a                          ;[c6e3] write 0 in all memory in [$ffd5:$ffe9]
+    ld      (hl),a                          ;[c6e3] write 0 in all memory in [$ffd4:$ffe8]
     inc     hl                              ;[c6e4]
     djnz    label_c6e3                      ;[c6e5]
     ret                                     ;[c6e7]
@@ -1137,6 +1154,7 @@ label_c701:
     ret                                     ;[c71b]
 
     ; SUBROUTINE C71C; CRTC TODO; crtc_foo_c71c(hl: value, ix)
+    ; Update cursor position in CRTC
 crtc_foo_c71c:
     ld      a,h                             ;[c71c]
     and     $07                             ;[c71d]
