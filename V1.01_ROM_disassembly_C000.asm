@@ -59,13 +59,15 @@ label_c064:
     inc     hl                              ;[c065]
     call    $c45e                           ;[c066] putchar()
     djnz    label_c064                      ;[c069]
+
 label_c06b:
-    call    $c0a7                           ;[c06b]
+    call    $c0a7                           ;[c06b] getchar?
     ld      a,b                             ;[c06e]
     cp      $4d                             ;[c06f]
-    jr      z,label_c088                    ;[c071]
+    jr      z,label_c088                    ;[c071] jump if getchar() == 'M'
     cp      $5c                             ;[c073]
-    jr      nz,label_c06b                   ;[c075]
+    jr      nz,label_c06b                   ;[c075] repeat if getchar() != '\'
+
     ld      a,($8000)                       ;[c077]
     cpl                                     ;[c07a]
     ld      ($8000),a                       ;[c07b]
@@ -91,15 +93,19 @@ label_c09e:
 
     ; Current idle loop
     ; At the moment, the PC hangs in this loop, reading 0x44 from $b3 IO
+    ; getchar?
+    ;    |-----------------------|
+    ; BC | 0xxx xxxx | 1xxx xxxx |
+    ;    |-----------------------|
+    ;
 label_c0a7:
     in      a,($b3)                         ;[c0a7]
     bit     0,a                             ;[c0a9]
     jr      z,label_c0a7                    ;[c0ab]
-
     in      a,($b2)                         ;[c0ad]
     ld      b,a                             ;[c0af]
     bit     7,a                             ;[c0b0]
-    jr      nz,label_c0a7                   ;[c0b2]
+    jr      nz,label_c0a7                   ;[c0b2] Repeat if MSb is 1
 label_c0b4:
     in      a,($b3)                         ;[c0b4]
     bit     0,a                             ;[c0b6]
@@ -107,7 +113,7 @@ label_c0b4:
     in      a,($b2)                         ;[c0ba]
     ld      c,a                             ;[c0bc]
     bit     7,a                             ;[c0bd]
-    jr      z,label_c0b4                    ;[c0bf]
+    jr      z,label_c0b4                    ;[c0bf] Repeat if MSb is 0
     ret                                     ;[c0c1]
 
     ; SUBROUTINE C0C2
