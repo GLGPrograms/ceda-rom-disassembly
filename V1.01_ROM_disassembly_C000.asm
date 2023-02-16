@@ -63,6 +63,7 @@ label_c064:
     inc     hl                              ;[c065]
     call    $c45e                           ;[c066] putchar()
     djnz    label_c064                      ;[c069]
+
 label_c06b:
     call    $c0a7                           ;[c06b] read from keyboard
     ld      a,b                             ;[c06e]
@@ -97,6 +98,10 @@ label_c09e:
     ; SUBROUTINE C0A7
     ; Read from keyboard
     ; Returns in (B,C) = (first,second)
+
+    ;    |-----------------------|
+    ; BC | 0xxx xxxx | 1xxx xxxx |
+    ;    |-----------------------|
 
     ; When no keyboard is connected, Sanco loops in this loop forever
 label_c0a7:
