@@ -64,9 +64,9 @@ label_c06b:
     call    $c0a7                           ;[c06b] getchar?
     ld      a,b                             ;[c06e]
     cp      $4d                             ;[c06f]
-    jr      z,label_c088                    ;[c071] jump if getchar() == 'M'
+    jr      z,label_c088                    ;[c071] jump if getchar() == $4D (BOOT key)
     cp      $5c                             ;[c073]
-    jr      nz,label_c06b                   ;[c075] repeat if getchar() != '\'
+    jr      nz,label_c06b                   ;[c075] repeat if getchar() != $5C (F15)
 
     ld      a,($8000)                       ;[c077]
     cpl                                     ;[c07a]
