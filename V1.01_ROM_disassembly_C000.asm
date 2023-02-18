@@ -231,11 +231,17 @@ label_c144:
 label_c14a:
     pop     bc                              ;[c14a] c1
     dec     b                               ;[c14b] 05
-    jp      pe,$21ff                        ;[c14c] ea ff
+    ; WORK IN PROGRESS
+    ; Original disassembled code was misaligned at this point.
+    ; Manually fixed by removing the next instruction and splitting
+    ; it in raw bytes and partial next opcode.
+    ; jp      pe,$21ff                        ;[c14c] ea ff
+    BYTE $ea
+    BYTE $ff
 
     ; SUBROUTINE C14E;
     ; Loads a piece of code in RAM, then executes it
-    ld      hl,($c165)                      ;[c14e]
+    ld      hl,$c165                        ;[c14e]
     ld      de,$0010                        ;[c151]
     ld      bc,$000f                        ;[c154]
     ; LDIR: memcpy(de: dst, hl: src, bc: size)
