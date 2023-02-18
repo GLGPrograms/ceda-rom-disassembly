@@ -1,0 +1,10 @@
+#!/bin/bash
+
+CHECKSUM=$(md5sum build/v101.bin | awk '{print $1}')
+
+if [ "$CHECKSUM" != "8ca6533c657f39fca90a59f5b0b39969" ]; then
+    exit 1
+fi
+
+exit 0
+
