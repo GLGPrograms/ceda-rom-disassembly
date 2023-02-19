@@ -12,7 +12,7 @@ _main:
     jp      $c027                           ;[c00f] reset SIO interrupts
     jp      $c027                           ;[c012] reset SIO interrupts
     jp      $c027                           ;[c015] reset SIO interrupts
-    jp      $c19d                           ;[c018]
+    jp      fdc_rwfs_c19d                   ;[c018]
     jp      $c18f                           ;[c01b]
     jp      $c174                           ;[c01e]
     jp      $cde2                           ;[c021]
@@ -64,14 +64,15 @@ label_c064:
     call    $c45e                           ;[c066] putchar()
     djnz    label_c064                      ;[c069]
 
-label_c06b:
+; Boot procedure: execute a routine associated to a keypress
+bios_waitkey:
     call    $c0a7                           ;[c06b] read from keyboard
     ld      a,b                             ;[c06e]
     cp      $4d                             ;[c06f]
-    jr      z,label_c088                    ;[c071] jump if getchar() == $4D (BOOT key)
+    jr      z,bios_bootkey                  ;[c071] jump if getchar() == $4D (BOOT key)
     cp      $5c                             ;[c073]
-    jr      nz,label_c06b                   ;[c075] repeat if getchar() != $5C (F15)
-
+    jr      nz,bios_waitkey                 ;[c075] repeat if getchar() != $5C (F15)
+; Boot trampoline executed when F15 key is pressed
     ld      a,($8000)                       ;[c077]
     cpl                                     ;[c07a]
     ld      ($8000),a                       ;[c07b]
@@ -79,21 +80,23 @@ label_c06b:
     cp      $c3                             ;[c081]
     jr      nz,label_c027                   ;[c083]
     jp      $8000                           ;[c085]
-label_c088:
-    ld      de,$0000                        ;[c088]
-    ld      bc,$4000                        ;[c08b]
-    ld      hl,$0080                        ;[c08e]
-    ld      a,$01                           ;[c091]
-    call    $c19d                           ;[c093]
-    cp      $ff                             ;[c096]
-    jr      nz,label_c09e                   ;[c098]
-    out     ($da),a                         ;[c09a]
-    jr      label_c088                      ;[c09c]
+
+; Boot trampoline executed when BOOT key is pressed
+bios_bootkey:
+    ld      de,$0000                        ;[c088] track = 0, sector = 0
+    ld      bc,$4000                        ;[c08b] drive = 0, cmd = read ($40)
+    ld      hl,$0080                        ;[c08e] load in $0080
+    ld      a,$01                           ;[c091] formatting mode, seems to be 180 bytes per sector
+    call    fdc_rwfs_c19d                   ;[c093] invoke reading
+    cp      $ff                             ;[c096] check for error...
+    jr      nz,label_c09e                   ;[c098] ...if ok, go on with loading
+    out     ($da),a                         ;[c09a] ... else, beep and try again
+    jr      bios_bootkey                    ;[c09c]
 label_c09e:
     ld      a,$06                           ;[c09e] load A with $06
     out     ($b2),a                         ;[c0a0] send to keyboard
     out     ($da),a                         ;[c0a2]
-    jp      $0080                           ;[c0a4]
+    jp      $0080                           ;[c0a4] execute fresh code from ram
 
     ; SUBROUTINE C0A7
     ; Read from keyboard
@@ -334,394 +337,445 @@ label_c19b:
     ex      (sp),hl                         ;[c19b] e3
     ret                                     ;[c19c] c9
 
-    push    bc                              ;[c19d] c5
-    push    de                              ;[c19e] d5
-    push    hl                              ;[c19f] e5
-    ld      ($ffb8),a                       ;[c1a0] 32 b8 ff
-    ld      a,$0a                           ;[c1a3] 3e 0a
-    ld      ($ffbf),a                       ;[c1a5] 32 bf ff
-    ld      ($ffb9),bc                      ;[c1a8] ed 43 b9 ff
-    ld      ($ffbb),de                      ;[c1ac] ed 53 bb ff
-    ld      ($ffbd),hl                      ;[c1b0] 22 bd ff
-    call    $c423                           ;[c1b3] cd 23 c4
-    ld      a,($ffba)                       ;[c1b6] 3a ba ff
-    and     $f0                             ;[c1b9] e6 f0
-    jp      z,$c1e6                         ;[c1bb] ca e6 c1
-    cp      $40                             ;[c1be] fe 40
-    jp      z,$c1dc                         ;[c1c0] ca dc c1
-    cp      $80                             ;[c1c3] fe 80
-    jp      z,$c1d7                         ;[c1c5] ca d7 c1
-    cp      $20                             ;[c1c8] fe 20
-    jp      z,$c1e1                         ;[c1ca] ca e1 c1
-    cp      $f0                             ;[c1cd] fe f0
-    jp      z,$c1eb                         ;[c1cf] ca eb c1
-    ld      a,$ff                           ;[c1d2] 3e ff
-    jp      $c1f0                           ;[c1d4] c3 f0 c1
-    call    $c1f4                           ;[c1d7] cd f4 c1
-    jr      label_c1f0                      ;[c1da] 18 14
-    call    $c24a                           ;[c1dc] cd 4a c2
-    jr      label_c1f0                      ;[c1df] 18 0f
-    call    $c3a9                           ;[c1e1] cd a9 c3
-    jr      label_c1f0                      ;[c1e4] 18 0a
-    call    $c391                           ;[c1e6] cd 91 c3
-    jr      label_c1f0                      ;[c1e9] 18 05
-    call    $c2e3                           ;[c1eb] cd e3 c2
-    jr      label_c1f0                      ;[c1ee] 18 00
-label_c1f0:
+    ; FDC Read Write Format Seek routine.
+    ; Arguments:
+    ; a: TODO
+    ; b: drive number (0-3) + HD flag
+    ; c: operation command, see switch in this routine
+    ; d: track number
+    ; e: head number
+    ; hl: read/write buffer address
+fdc_rwfs_c19d:
+    push    bc                              ;[c19d]
+    push    de                              ;[c19e]
+    push    hl                              ;[c19f]
+    ld      ($ffb8),a                       ;[c1a0] TODO
+    ld      a,$0a                           ;[c1a3]
+    ld      ($ffbf),a                       ;[c1a5] value used in error checking routines
+    ld      ($ffb9),bc                      ;[c1a8] *$ffb9 = drive no. + HD flag, *$ffba = operation command
+    ld      ($ffbb),de                      ;[c1ac] *$ffbb = track number, *$ffbc = head index (0/1)
+    ld      ($ffbd),hl                      ;[c1b0] base address for read/write buffer
+    call    fdc_baz_c423                    ;[c1b3] TODO
+    ld      a,($ffba)                       ;[c1b6] load command byte
+    and     $f0                             ;[c1b9]
+    jp      z,fdc_sw_track0                 ;[c1bb] case $00: move to track 0 (home)
+    cp      $40                             ;[c1be]
+    jp      z,fdc_sw_read_data              ;[c1c0] case $40: read sector in hl buffer
+    cp      $80                             ;[c1c3]
+    jp      z,fdc_sw_write_data             ;[c1c5] case $80: write sector in hl buffer
+    cp      $20                             ;[c1c8]
+    jp      z,fdc_sw_seek                   ;[c1ca] case $20: move head to desired track
+    cp      $f0                             ;[c1cd]
+    jp      z,fdc_sw_format                 ;[c1cf] case $20: seek to desired track
+    ld      a,$ff                           ;[c1d2]
+    jp      fdc_sw_default                  ;[c1d4] default: return
+fdc_sw_write_data:
+    call    fdc_write_data_c1f4             ;[c1d7]
+    jr      fdc_sw_default                  ;[c1da]
+fdc_sw_read_data:
+    call    fdc_read_data_c24a              ;[c1dc]
+    jr      fdc_sw_default                  ;[c1df]
+fdc_sw_seek:
+    call    fdc_seek_c3a9                   ;[c1e1]
+    jr      fdc_sw_default                  ;[c1e4]
+fdc_sw_track0:
+    call    fdc_track0_c391                 ;[c1e6]
+    jr      fdc_sw_default                  ;[c1e9]
+fdc_sw_format:
+    call    fdc_format_c2e3                 ;[c1eb]
+    jr      fdc_sw_default                  ;[c1ee]
+fdc_sw_default:
     pop     hl                              ;[c1f0] e1
     pop     de                              ;[c1f1] d1
     pop     bc                              ;[c1f2] c1
     ret                                     ;[c1f3] c9
 
-    call    $c3a9                           ;[c1f4] cd a9 c3
-    call    $c2b7                           ;[c1f7] cd b7 c2
-    push    de                              ;[c1fa] d5
-    call    $c41c                           ;[c1fb] cd 1c c4
-    ld      c,$c5                           ;[c1fe] 0e c5
-    ld      a,($ffb8)                       ;[c200] 3a b8 ff
-    or      a                               ;[c203] b7
-    jr      nz,label_c208                   ;[c204] 20 02
-    res     6,c                             ;[c206] cb b1
+    ; FDC write data routine
+    ; Writes data from *$ffbd to desired track/sector
+fdc_write_data_c1f4:
+    call    fdc_seek_c3a9                   ;[c1f4] move to desired track
+fdc_write_retry_c1f7:
+    call    fdc_compute_bps_c2b7            ;[c1f7] compute byte per sectors, result in de
+    push    de                              ;[c1fa]
+    call    fdc_wait_busy                   ;[c1fb]
+    ld      c,$c5                           ;[c1fe] load "write data" command with MT and MF flags set
+    ld      a,($ffb8)                       ;[c200]
+    or      a                               ;[c203]
+    jr      nz,label_c208                   ;[c204] if *ffb8 == 0...
+    res     6,c                             ;[c206] ...clear MF flag (FM mode)
 label_c208:
-    call    $c415                           ;[c208] cd 15 c4
-    di                                      ;[c20b] f3
-    call    $c34e                           ;[c20c] cd 4e c3
-    pop     de                              ;[c20f] d1
-    ld      c,$c1                           ;[c210] 0e c1
-    ld      b,e                             ;[c212] 43
-    ld      hl,($ffbd)                      ;[c213] 2a bd ff
+    call    fdc_send_cmd                    ;[c208] send the "write data" command with desired MF flag
+    di                                      ;[c20b] disable interrupts
+    call    fdc_send_rw_args_c34e           ;[c20c] send "write data" arguments (common with "read data" arguments)
+    pop     de                              ;[c20f]
+    ld      c,$c1                           ;[c210] prepare IO address in c
+    ld      b,e                             ;[c212] load number of bytes to write (LSB)
+    ld      hl,($ffbd)                      ;[c213] load base address of writing buffer
+    ; Buffer writing loop
 label_c216:
-    in      a,($82)                         ;[c216] db 82
-    bit     2,a                             ;[c218] cb 57
-    jr      z,label_c216                    ;[c21a] 28 fa
-    in      a,($c0)                         ;[c21c] db c0
-    bit     5,a                             ;[c21e] cb 6f
-    jr      z,label_c229                    ;[c220] 28 07
-    outi                                    ;[c222] ed a3
-    jr      nz,label_c216                   ;[c224] 20 f0
-    dec     d                               ;[c226] 15
-    jr      nz,label_c216                   ;[c227] 20 ed
+    in      a,($82)                         ;[c216]
+    bit     2,a                             ;[c218]
+    jr      z,label_c216                    ;[c21a]
+    in      a,($c0)                         ;[c21c] read FDC main status register
+    bit     5,a                             ;[c21e] check if still in execution phase...
+    jr      z,label_c229                    ;[c220] ...if not, end writing
+    outi                                    ;[c222] write data from buffer to FDC:  IO(c) = *(hl++); b--;
+    jr      nz,label_c216                   ;[c224]
+    dec     d                               ;[c226] bytes per sector is usually 512, must use a double byte counter
+    jr      nz,label_c216                   ;[c227] write ends when d = 0 and b = 0
 label_c229:
-    out     ($dc),a                         ;[c229] d3 dc
-    ei                                      ;[c22b] fb
-    call    $c3f4                           ;[c22c] cd f4 c3
-    ld      a,($ffc0)                       ;[c22f] 3a c0 ff
-    and     $c0                             ;[c232] e6 c0
-    cp      $40                             ;[c234] fe 40
-    jr      nz,label_c248                   ;[c236] 20 10
-    call    $c2a0                           ;[c238] cd a0 c2
-    ld      a,($ffbf)                       ;[c23b] 3a bf ff
-    dec     a                               ;[c23e] 3d
-    ld      ($ffbf),a                       ;[c23f] 32 bf ff
-    jp      nz,$c1f7                        ;[c242] c2 f7 c1
-    ld      a,$ff                           ;[c245] 3e ff
-    ret                                     ;[c247] c9
-
+    out     ($dc),a                         ;[c229]
+    ei                                      ;[c22b] enable interrupts again
+    call    fdc_rw_status_c3f4              ;[c22c] command response, put it in $ffc0-$ffc6
+    ld      a,($ffc0)                       ;[c22f] fetch status (ST0)
+    and     $c0                             ;[c232]
+    cp      $40                             ;[c234] TODO check for error
+    jr      nz,label_c248                   ;[c236] TODO jump if ok or fail?
+    call    fdc_err_check_c2a0              ;[c238] after-write error checking (common with "read data")
+    ld      a,($ffbf)                       ;[c23b] TODO
+    dec     a                               ;[c23e] TODO may be an error retry counter
+    ld      ($ffbf),a                       ;[c23f] TODO
+    jp      nz,fdc_write_retry_c1f7         ;[c242] may be a write retry, after 256 iterations it gives up
+    ld      a,$ff                           ;[c245]
+    ret                                     ;[c247] return -1?
 label_c248:
-    xor     a                               ;[c248] af
-    ret                                     ;[c249] c9
+    xor     a                               ;[c248]
+    ret                                     ;[c249] return 0?
 
-    call    $c3a9                           ;[c24a] cd a9 c3
-    call    $c2b7                           ;[c24d] cd b7 c2
-    push    de                              ;[c250] d5
-    call    $c41c                           ;[c251] cd 1c c4
-    ld      c,$c6                           ;[c254] 0e c6
-    ld      a,($ffb8)                       ;[c256] 3a b8 ff
-    or      a                               ;[c259] b7
-    jr      nz,label_c25e                   ;[c25a] 20 02
-    res     6,c                             ;[c25c] cb b1
+    ; FDC read data routine
+    ; Read data from desired track/sector to *$ffbd
+fdc_read_data_c24a:
+    call    fdc_seek_c3a9                   ;[c24a] move to desired track
+fdc_read_retry_c24d:
+    call    fdc_compute_bps_c2b7            ;[c24d] compute byte per sectors, result in de
+    push    de                              ;[c250]
+    call    fdc_wait_busy                   ;[c251]
+    ld      c,$c6                           ;[c254] load "read data" command with MT and MF flags set
+    ld      a,($ffb8)                       ;[c256]
+    or      a                               ;[c259]
+    jr      nz,label_c25e                   ;[c25a] if *ffb8 == 0...
+    res     6,c                             ;[c25c] ...clear MF flag (FM mode)
 label_c25e:
-    call    $c415                           ;[c25e] cd 15 c4
-    di                                      ;[c261] f3
-    call    $c34e                           ;[c262] cd 4e c3
-    pop     de                              ;[c265] d1
-    ld      c,$c1                           ;[c266] 0e c1
-    ld      b,e                             ;[c268] 43
-    ld      hl,($ffbd)                      ;[c269] 2a bd ff
+    call    fdc_send_cmd                    ;[c25e] send the "read data" command
+    di                                      ;[c261] disable interrupts
+    call    fdc_send_rw_args_c34e           ;[c262] send "read data" arguments (common with "write data" arguments)
+    pop     de                              ;[c265]
+    ld      c,$c1                           ;[c266] prepare IO address in c
+    ld      b,e                             ;[c268] load number of bytes to write (LSB)
+    ld      hl,($ffbd)                      ;[c269] load base address of reading buffer
 label_c26c:
-    in      a,($82)                         ;[c26c] db 82
-    bit     2,a                             ;[c26e] cb 57
-    jr      z,label_c26c                    ;[c270] 28 fa
-    in      a,($c0)                         ;[c272] db c0
-    bit     5,a                             ;[c274] cb 6f
-    jr      z,label_c27f                    ;[c276] 28 07
-    ini                                     ;[c278] ed a2
-    jr      nz,label_c26c                   ;[c27a] 20 f0
-    dec     d                               ;[c27c] 15
-    jr      nz,label_c26c                   ;[c27d] 20 ed
+    in      a,($82)                         ;[c26c]
+    bit     2,a                             ;[c26e]
+    jr      z,label_c26c                    ;[c270]
+    in      a,($c0)                         ;[c272] read FDC main status register
+    bit     5,a                             ;[c274] check if still in execution phase...
+    jr      z,label_c27f                    ;[c276] ...if not, end reading
+    ini                                     ;[c278] read data from FDC to *hl, hl++, b--
+    jr      nz,label_c26c                   ;[c27a]
+    dec     d                               ;[c27c] bytes per sector is usually 512, must use a double byte counter
+    jr      nz,label_c26c                   ;[c27d] read ends when d = 0 and b = 0
 label_c27f:
-    out     ($dc),a                         ;[c27f] d3 dc
-    ei                                      ;[c281] fb
-    call    $c3f4                           ;[c282] cd f4 c3
-    ld      a,($ffc0)                       ;[c285] 3a c0 ff
-    and     $c0                             ;[c288] e6 c0
-    cp      $40                             ;[c28a] fe 40
-    jr      nz,label_c29e                   ;[c28c] 20 10
-    call    $c2a0                           ;[c28e] cd a0 c2
-    ld      a,($ffbf)                       ;[c291] 3a bf ff
-    dec     a                               ;[c294] 3d
-    ld      ($ffbf),a                       ;[c295] 32 bf ff
-    jp      nz,$c24d                        ;[c298] c2 4d c2
-    ld      a,$ff                           ;[c29b] 3e ff
-    ret                                     ;[c29d] c9
-
+    out     ($dc),a                         ;[c27f]
+    ei                                      ;[c281] enable interrupts again
+    call    fdc_rw_status_c3f4              ;[c282] command response, put it in $ffc0-$ffc6
+    ld      a,($ffc0)                       ;[c285] fetch status (ST0)
+    and     $c0                             ;[c288]
+    cp      $40                             ;[c28a] TODO check for error
+    jr      nz,label_c29e                   ;[c28c] TODO jump if ok or fail?
+    call    fdc_err_check_c2a0              ;[c28e] after-read error checking
+    ld      a,($ffbf)                       ;[c291] TODO
+    dec     a                               ;[c294] TODO may be an error retry counter
+    ld      ($ffbf),a                       ;[c295] TODO
+    jp      nz,fdc_read_retry_c24d          ;[c298] may be a write retry, after 256 iterations it gives up
+    ld      a,$ff                           ;[c29b]
+    ret                                     ;[c29d] return -1?
 label_c29e:
-    xor     a                               ;[c29e] af
-    ret                                     ;[c29f] c9
+    xor     a                               ;[c29e]
+    ret                                     ;[c29f] return 0?
 
-    ld      a,($ffc2)                       ;[c2a0] 3a c2 ff
-    bit     4,a                             ;[c2a3] cb 67
-    jr      z,label_c2ab                    ;[c2a5] 28 04
-    call    $c391                           ;[c2a7] cd 91 c3
-    ret                                     ;[c2aa] c9
-
+    ; TODO this is a FDC routine related to error checking after read/write
+fdc_err_check_c2a0:
+    ld      a,($ffc2)                       ;[c2a0] read 3rd status byte after cmd execution (ST2)
+    bit     4,a                             ;[c2a3]
+    jr      z,label_c2ab                    ;[c2a5]
+    call    fdc_track0_c391                 ;[c2a7] reset head position if bit 4 is set
+    ret                                     ;[c2aa]
 label_c2ab:
-    ld      a,($ffc1)                       ;[c2ab] 3a c1 ff
-    bit     0,a                             ;[c2ae] cb 47
-    jr      z,label_c2b6                    ;[c2b0] 28 04
-    call    $c391                           ;[c2b2] cd 91 c3
-    ret                                     ;[c2b5] c9
-
+    ld      a,($ffc1)                       ;[c2ab] read 2nd status byte after cmd execution (ST2)
+    bit     0,a                             ;[c2ae]
+    jr      z,label_c2b6                    ;[c2b0]
+    call    fdc_track0_c391                 ;[c2b2] reset head position if bit 0 is set
+    ret                                     ;[c2b5]
 label_c2b6:
-    ret                                     ;[c2b6] c9
+    ret                                     ;[c2b6]
 
-    ld      e,$00                           ;[c2b7] 1e 00
-    ld      a,($ffb8)                       ;[c2b9] 3a b8 ff
-    cp      $03                             ;[c2bc] fe 03
-    jr      nz,label_c2d4                   ;[c2be] 20 14
-    ld      d,$04                           ;[c2c0] 16 04
-    ld      a,($ffbb)                       ;[c2c2] 3a bb ff
-    bit     7,a                             ;[c2c5] cb 7f
-    jr      z,label_c2e2                    ;[c2c7] 28 19
-    ld      a,($ffba)                       ;[c2c9] 3a ba ff
-    and     $0f                             ;[c2cc] e6 0f
-    rlca                                    ;[c2ce] 07
-    rlca                                    ;[c2cf] 07
-    add     d                               ;[c2d0] 82
-    ld      d,a                             ;[c2d1] 57
-    jr      label_c2e2                      ;[c2d2] 18 0e
+    ; TODO: calculate number of bytesper sector. Result is in de.
+fdc_compute_bps_c2b7:
+    ld      e,$00                           ;[c2b7] e = 0
+    ld      a,($ffb8)                       ;[c2b9] load FM/MFM mode
+    cp      $03                             ;[c2bc] TODO
+    jr      nz,label_c2d4                   ;[c2be] jmp if *(ffb8) != 3
+    ld      d,$04                           ;[c2c0]
+    ld      a,($ffbb)                       ;[c2c2] load track number
+    bit     7,a                             ;[c2c5]
+    jr      z,label_c2e2                    ;[c2c7]
+    ld      a,($ffba)                       ;[c2c9] load (lower nibble of) operation command
+    and     $0f                             ;[c2cc]
+    rlca                                    ;[c2ce]
+    rlca                                    ;[c2cf]
+    add     d                               ;[c2d0]
+    ld      d,a                             ;[c2d1] d = ((*$ffba & 0xf) + 1) * 4
+    jr      label_c2e2                      ;[c2d2] return
 label_c2d4:
-    or      a                               ;[c2d4] b7
-    jr      nz,label_c2d9                   ;[c2d5] 20 02
-    ld      e,$80                           ;[c2d7] 1e 80
+    or      a                               ;[c2d4]
+    jr      nz,label_c2d9                   ;[c2d5] jmp if *(ffb8) != 0
+    ld      e,$80                           ;[c2d7] e = 128
 label_c2d9:
-    ld      a,($ffba)                       ;[c2d9] 3a ba ff
-    and     $0f                             ;[c2dc] e6 0f
-    ld      d,$01                           ;[c2de] 16 01
-    add     d                               ;[c2e0] 82
-    ld      d,a                             ;[c2e1] 57
+    ld      a,($ffba)                       ;[c2d9] load (lower nibble of) operation command
+    and     $0f                             ;[c2dc]
+    ld      d,$01                           ;[c2de]
+    add     d                               ;[c2e0]
+    ld      d,a                             ;[c2e1] d = (*$ffba & 0xf) + 1
 label_c2e2:
-    ret                                     ;[c2e2] c9
+    ret                                     ;[c2e2]
 
-    call    $c3a9                           ;[c2e3] cd a9 c3
-    cp      $ff                             ;[c2e6] fe ff
-    ret     z                               ;[c2e8] c8
-    ld      b,$14                           ;[c2e9] 06 14
-    ld      a,($ffb8)                       ;[c2eb] 3a b8 ff
-    cp      $03                             ;[c2ee] fe 03
-    jr      z,label_c2f4                    ;[c2f0] 28 02
-    ld      b,$40                           ;[c2f2] 06 40
+    ; TODO formatting routine
+fdc_format_c2e3:
+    call    fdc_seek_c3a9                   ;[c2e3]
+    cp      $ff                             ;[c2e6]
+    ret     z                               ;[c2e8]
+    ld      b,$14                           ;[c2e9]
+    ld      a,($ffb8)                       ;[c2eb]
+    cp      $03                             ;[c2ee]
+    jr      z,label_c2f4                    ;[c2f0]
+    ld      b,$40                           ;[c2f2]
 label_c2f4:
-    push    bc                              ;[c2f4] c5
-    call    $c41c                           ;[c2f5] cd 1c c4
-    ld      c,$4d                           ;[c2f8] 0e 4d
-    call    $c415                           ;[c2fa] cd 15 c4
-    ld      bc,($ffb9)                      ;[c2fd] ed 4b b9 ff
-    call    $c415                           ;[c301] cd 15 c4
-    ld      a,($ffb8)                       ;[c304] 3a b8 ff
-    ld      c,a                             ;[c307] 4f
-    call    $c415                           ;[c308] cd 15 c4
-    ld      c,$05                           ;[c30b] 0e 05
-    ld      a,($ffb8)                       ;[c30d] 3a b8 ff
-    cp      $03                             ;[c310] fe 03
-    jr      z,label_c316                    ;[c312] 28 02
-    ld      c,$10                           ;[c314] 0e 10
+    push    bc                              ;[c2f4]
+    call    fdc_wait_busy                   ;[c2f5]
+    ld      c,$4d                           ;[c2f8]
+    call    fdc_send_cmd                    ;[c2fa] send "write id" command
+    ld      bc,($ffb9)                      ;[c2fd] 1st argument: drive number
+    call    fdc_send_cmd                    ;[c301]
+    ld      a,($ffb8)                       ;[c304] 2nd argument: number of bytes per sector
+    ld      c,a                             ;[c307]
+    call    fdc_send_cmd                    ;[c308]
+    ld      c,$05                           ;[c30b] default sectors/track number
+    ld      a,($ffb8)                       ;[c30d]
+    cp      $03                             ;[c310]
+    jr      z,label_c316                    ;[c312]
+    ld      c,$10                           ;[c314]
 label_c316:
-    call    $c415                           ;[c316] cd 15 c4
-    ld      c,$28                           ;[c319] 0e 28
-    call    $c415                           ;[c31b] cd 15 c4
-    di                                      ;[c31e] f3
-    ld      c,$e5                           ;[c31f] 0e e5
-    call    $c415                           ;[c321] cd 15 c4
-    pop     bc                              ;[c324] c1
-    ld      c,$c1                           ;[c325] 0e c1
-    ld      hl,($ffbd)                      ;[c327] 2a bd ff
+    call    fdc_send_cmd                    ;[c316] 3rd argument: sectors/track number
+    ld      c,$28                           ;[c319]
+    call    fdc_send_cmd                    ;[c31b] 4rd argument: gap3 length
+    di                                      ;[c31e]
+    ld      c,$e5                           ;[c31f]
+    call    fdc_send_cmd                    ;[c321] 5th argument: filler byte value
+    pop     bc                              ;[c324]
+    ld      c,$c1                           ;[c325]
+    ld      hl,($ffbd)                      ;[c327]
 label_c32a:
-    in      a,($82)                         ;[c32a] db 82
-    bit     2,a                             ;[c32c] cb 57
-    jr      z,label_c32a                    ;[c32e] 28 fa
-    in      a,($c0)                         ;[c330] db c0
-    bit     5,a                             ;[c332] cb 6f
-    jr      z,label_c33a                    ;[c334] 28 04
-    outi                                    ;[c336] ed a3
-    jr      nz,label_c32a                   ;[c338] 20 f0
+    in      a,($82)                         ;[c32a]
+    bit     2,a                             ;[c32c]
+    jr      z,label_c32a                    ;[c32e]
+    in      a,($c0)                         ;[c330] read main status register
+    bit     5,a                             ;[c332] check if still in execution phase...
+    jr      z,label_c33a                    ;[c334] ...if not, end formatting
+    outi                                    ;[c336] TODO why do I have to write something if i'm formatting?
+    jr      nz,label_c32a                   ;[c338]
 label_c33a:
-    out     ($dc),a                         ;[c33a] d3 dc
-    ei                                      ;[c33c] fb
-    call    $c3f4                           ;[c33d] cd f4 c3
-    ld      a,($ffc0)                       ;[c340] 3a c0 ff
-    and     $c0                             ;[c343] e6 c0
-    cp      $40                             ;[c345] fe 40
-    jr      nz,label_c34c                   ;[c347] 20 03
-    ld      a,$ff                           ;[c349] 3e ff
-    ret                                     ;[c34b] c9
-
+    out     ($dc),a                         ;[c33a]
+    ei                                      ;[c33c]
+    call    fdc_rw_status_c3f4              ;[c33d] command response, put it in $ffc0-$ffc6
+    ld      a,($ffc0)                       ;[c340]
+    and     $c0                             ;[c343]
+    cp      $40                             ;[c345]
+    jr      nz,label_c34c                   ;[c347]
+    ld      a,$ff                           ;[c349]
+    ret                                     ;[c34b]
 label_c34c:
-    xor     a                               ;[c34c] af
-    ret                                     ;[c34d] c9
+    xor     a                               ;[c34c]
+    ret                                     ;[c34d]
 
-    ld      bc,($ffb9)                      ;[c34e] ed 4b b9 ff
-    call    $c415                           ;[c352] cd 15 c4
-    ld      de,($ffbb)                      ;[c355] ed 5b bb ff
-    ld      c,d                             ;[c359] 4a
-    call    $c415                           ;[c35a] cd 15 c4
-    ld      bc,($ffb9)                      ;[c35d] ed 4b b9 ff
-    ld      a,c                             ;[c361] 79
-    and     $04                             ;[c362] e6 04
-    rrca                                    ;[c364] 0f
-    rrca                                    ;[c365] 0f
-    ld      c,a                             ;[c366] 4f
-    call    $c415                           ;[c367] cd 15 c4
-    res     7,e                             ;[c36a] cb bb
-    ld      c,e                             ;[c36c] 4b
-    inc     c                               ;[c36d] 0c
-    call    $c415                           ;[c36e] cd 15 c4
-    ld      a,($ffb8)                       ;[c371] 3a b8 ff
-    ld      c,a                             ;[c374] 4f
-    call    $c415                           ;[c375] cd 15 c4
-    ld      c,$05                           ;[c378] 0e 05
-    ld      a,($ffb8)                       ;[c37a] 3a b8 ff
-    cp      $03                             ;[c37d] fe 03
-    jr      z,label_c383                    ;[c37f] 28 02
-    ld      c,$10                           ;[c381] 0e 10
+    ; FDC send arguments of "write data" command
+fdc_send_rw_args_c34e:
+    ld      bc,($ffb9)                      ;[c34e] 1st argument: load drive number
+    call    fdc_send_cmd                    ;[c352]
+    ld      de,($ffbb)                      ;[c355] 2nd argument: cylinder number
+    ld      c,d                             ;[c359]
+    call    fdc_send_cmd                    ;[c35a]
+    ld      bc,($ffb9)                      ;[c35d] ffb9 contains HD flag too (physical head number)
+    ld      a,c                             ;[c361]
+    and     $04                             ;[c362] extract bit 2 (HD)
+    rrca                                    ;[c364]
+    rrca                                    ;[c365] Move in bit 0 position
+    ld      c,a                             ;[c366]
+    call    fdc_send_cmd                    ;[c367] 3rd argument: head number (0/1)
+    res     7,e                             ;[c36a]
+    ld      c,e                             ;[c36c]
+    inc     c                               ;[c36d]
+    call    fdc_send_cmd                    ;[c36e] 4th argument: sector number to write
+    ld      a,($ffb8)                       ;[c371]
+    ld      c,a                             ;[c374]
+    call    fdc_send_cmd                    ;[c375] 5th argument: number of bytes to write in sector
+    ld      c,$05                           ;[c378]
+    ld      a,($ffb8)                       ;[c37a]
+    cp      $03                             ;[c37d]
+    jr      z,label_c383                    ;[c37f]
+    ld      c,$10                           ;[c381]
 label_c383:
-    call    $c415                           ;[c383] cd 15 c4
-    ld      c,$28                           ;[c386] 0e 28
-    call    $c415                           ;[c388] cd 15 c4
-    ld      c,$ff                           ;[c38b] 0e ff
-    call    $c415                           ;[c38d] cd 15 c4
-    ret                                     ;[c390] c9
+    call    fdc_send_cmd                    ;[c383] 6th argument: EOT - final sector of a cylinder
+    ld      c,$28                           ;[c386]
+    call    fdc_send_cmd                    ;[c388] 7th argument: GPL - gap length fixed to 0x28
+    ld      c,$ff                           ;[c38b]
+    call    fdc_send_cmd                    ;[c38d] 8th argument: DTL - data length, should be invalid if 5th argument is != 0
+    ret                                     ;[c390]
 
-label_c391:
-    call    $c41c                           ;[c391] cd 1c c4
-    ld      c,$07                           ;[c394] 0e 07
-    call    $c415                           ;[c396] cd 15 c4
-    ld      bc,($ffb9)                      ;[c399] ed 4b b9 ff
-    res     2,c                             ;[c39d] cb 91
-    call    $c415                           ;[c39f] cd 15 c4
-    call    $c3d2                           ;[c3a2] cd d2 c3
-    jr      z,label_c391                    ;[c3a5] 28 ea
-    xor     a                               ;[c3a7] af
-    ret                                     ;[c3a8] c9
+; This routine seems to move the floppy head to track 0, then waits for the operation execution
+fdc_track0_c391 :
+    call    fdc_wait_busy                   ;[c391] cd 1c c4
+    ld      c,$07                           ;[c394] Recalibrate command
+    call    fdc_send_cmd                    ;[c396] Send command to FDC
+    ld      bc,($ffb9)                      ;[c399] Load drive number?
+    res     2,c                             ;[c39d] For some reason, clear bit 2. Recalibrate argument must be 0b000000xx, where xx = drive number in [0,3]
+    call    fdc_send_cmd                    ;[c39f] Send command to FDC
+    call    fdc_sis_c3d2                    ;[c3a2] Sends command Sense Interrupt Status and gets the two bytes answer (ST0 - PCN)
+    jr      z,fdc_track0_c391               ;[c3a5] Waits until byte ST0 = 0b01xxxxxx. Probably meaning that recalibration is completed?
+    xor     a                               ;[c3a7] Clear a
+    ret                                     ;[c3a8]
 
-    ld      de,($ffbb)                      ;[c3a9] ed 5b bb ff
-    ld      a,d                             ;[c3ad] 7a
-    or      a                               ;[c3ae] b7
-    jp      z,$c391                         ;[c3af] ca 91 c3
-    call    $c41c                           ;[c3b2] cd 1c c4
-    ld      c,$0f                           ;[c3b5] 0e 0f
-    call    $c415                           ;[c3b7] cd 15 c4
-    ld      bc,($ffb9)                      ;[c3ba] ed 4b b9 ff
-    call    $c415                           ;[c3be] cd 15 c4
-    ld      c,d                             ;[c3c1] 4a
-    call    $c415                           ;[c3c2] cd 15 c4
-    call    $c3d2                           ;[c3c5] cd d2 c3
-    jr      nz,label_c3d0                   ;[c3c8] 20 06
-    call    $c391                           ;[c3ca] cd 91 c3
-    jp      $c3a9                           ;[c3cd] c3 a9 c3
+    ; FDC: sends the seek command and move head upon desired cylinder
+    ; Arguments:
+    ; $ffbb: new cylinder number
+    ; $ffb9: drive number
+fdc_seek_c3a9:
+    ld      de,($ffbb)                      ;[c3a9]
+    ld      a,d                             ;[c3ad]
+    or      a                               ;[c3ae]
+    jp      z,fdc_track0_c391               ;[c3af] If desired cylinder is 0, skip this and call appropriate routine
+    call    fdc_wait_busy                   ;[c3b2]
+    ld      c,$0f                           ;[c3b5] Send "seek" command
+    call    fdc_send_cmd                    ;[c3b7]
+    ld      bc,($ffb9)                      ;[c3ba] 1st arg: load and send drive number + HD flag
+    call    fdc_send_cmd                    ;[c3be]
+    ld      c,d                             ;[c3c1] 2nd arg: send NCN (new cylinder number) = desired position of head
+    call    fdc_send_cmd                    ;[c3c2]
+    call    fdc_sis_c3d2                    ;[c3c5]
+    jr      nz,label_c3d0                   ;[c3c8] (i think) wait until completion. On failure:
+    call    fdc_track0_c391                 ;[c3ca] ...move head to cylinder 0...
+    jp      fdc_seek_c3a9                   ;[c3cd] ...and try again
 label_c3d0:
-    xor     a                               ;[c3d0] af
-    ret                                     ;[c3d1] c9
+    xor     a                               ;[c3d0] On success, a=0 and return
+    ret                                     ;[c3d1]
 
-    in      a,($82)                         ;[c3d2] db 82
-    bit     2,a                             ;[c3d4] cb 57
-    jp      z,$c3d2                         ;[c3d6] ca d2 c3
-    call    $c41c                           ;[c3d9] cd 1c c4
-    call    $c403                           ;[c3dc] cd 03 c4
-    ld      a,$08                           ;[c3df] 3e 08
-    out     ($c1),a                         ;[c3e1] d3 c1
-    call    $c40c                           ;[c3e3] cd 0c c4
-    in      a,($c1)                         ;[c3e6] db c1
-    ld      b,a                             ;[c3e8] 47
-    call    $c40c                           ;[c3e9] cd 0c c4
-    in      a,($c1)                         ;[c3ec] db c1
-    ld      a,b                             ;[c3ee] 78
-    and     $c0                             ;[c3ef] e6 c0
-    cp      $40                             ;[c3f1] fe 40
-    ret                                     ;[c3f3] c9
+    ; FDC: Sends the Sense Interrupt Status command and reads the two bytes (STO, PCN)
+fdc_sis_c3d2:
+    in      a,($82)                         ;[c3d2]
+    bit     2,a                             ;[c3d4]
+    jp      z,fdc_sis_c3d2                  ;[c3d6]
+    call    fdc_wait_busy                   ;[c3d9]
+    call    fdc_wait_rqm_wr                 ;[c3dc]
+    ld      a,$08                           ;[c3df]
+    out     ($c1),a                         ;[c3e1]
+    call    fdc_wait_rqm_rd                 ;[c3e3]
+    in      a,($c1)                         ;[c3e6]
+    ld      b,a                             ;[c3e8]
+    call    fdc_wait_rqm_rd                 ;[c3e9]
+    in      a,($c1)                         ;[c3ec]
+    ld      a,b                             ;[c3ee]
+    and     $c0                             ;[c3ef]
+    cp      $40                             ;[c3f1]
+    ret                                     ;[c3f3]
 
-    ld      hl,$ffc0                        ;[c3f4] 21 c0 ff
-    ld      b,$07                           ;[c3f7] 06 07
-    ld      c,$c1                           ;[c3f9] 0e c1
+    ; FDC response reader. After read/write/format execution, a 7 byte response is given.
+    ; Read it all in $ffc0-$ffc6
+fdc_rw_status_c3f4:
+    ld      hl,$ffc0                        ;[c3f4] buffer pointer
+    ld      b,$07                           ;[c3f7] data length, answer is 7 byte long
+    ld      c,$c1                           ;[c3f9] IO address
 label_c3fb:
-    call    $c40c                           ;[c3fb] cd 0c c4
-    ini                                     ;[c3fe] ed a2
-    jr      nz,label_c3fb                   ;[c400] 20 f9
-    ret                                     ;[c402] c9
+    call    fdc_wait_rqm_rd                 ;[c3fb]
+    ini                                     ;[c3fe] read from IO in *hl, hl++, b--
+    jr      nz,label_c3fb                   ;[c400] end if b = 0
+    ret                                     ;[c402]
 
     ; SUBROUTINE C403 ; wait for ioaddr(0xc0) to become "0b10xxxxxx"
-label_c403:
+    ; This routine seems to be related to the FDC
+    ; Read main status register $c0 and wait for RQM = 1 and DIO = 0
+    ; RQM = request from master, RQM = 1 means FDC is ready for communication with the CPU
+    ; DIO = data input/outpu, DIO = 0 means transfer from CPU to FDC
+fdc_wait_rqm_wr:
     in      a,($c0)                         ;[c403]
     rlca                                    ;[c405]
-    jr      nc,label_c403                   ;[c406] while (bit7 == 0), try again
+    jr      nc,fdc_wait_rqm_wr              ;[c406] while (bit7 == 0), try again
     rlca                                    ;[c408]
-    jr      c,label_c403                    ;[c409] while (bit7 == 1) && (bit6 == 1), try again
+    jr      c,fdc_wait_rqm_wr               ;[c409] while (bit7 == 1) && (bit6 == 1), try again
     ret                                     ;[c40b]
 
     ; SUBROUTINE C40C ; wait for ioaddr(0xc0) to become "0b11xxxxxx"
-label_c40c:
+    ; This routine seems to be related to the FDC
+    ; Read main status register $c0 and wait for RQM = 1 and DIO = 1
+    ; RQM = request from master, RQM = 1 means FDC is ready for communication with the CPU
+    ; DIO = data input/outpu, DIO = 1 means transfer from FDC to CPU
+fdc_wait_rqm_rd:
     in      a,($c0)                         ;[c40c]
     rlca                                    ;[c40e]
-    jr      nc,label_c40c                   ;[c40f] while (bit7 == 0), try again
+    jr      nc,fdc_wait_rqm_rd              ;[c40f] while (bit7 == 0), try again
     rlca                                    ;[c411]
-    jr      nc,label_c40c                   ;[c412] while (bit7 == 1) && (bit6 == 0), try again
+    jr      nc,fdc_wait_rqm_rd              ;[c412] while (bit7 == 1) && (bit6 == 0), try again
     ret                                     ;[c414]
 
     ; SUBROUTINE C415
-    call    $c403                           ;[c415]
+    ; Sends the command in c register to the FDC
+fdc_send_cmd:
+    call    fdc_wait_rqm_wr                 ;[c415]
     ld      a,c                             ;[c418]
     out     ($c1),a                         ;[c419]
     ret                                     ;[c41b]
 
     ; SUBROUTINE C41C ; while( ioaddr(0xc0).4 == 1 ), wait
-label_c41c:
+    ; This subroutine seems to be related to FDC.
+    ; $C0 may be the main status register, where bit 4 is the CB (active high busy) flag.
+fdc_wait_busy:
     in      a,($c0)                         ;[c41c]
     bit     4,a                             ;[c41e]
-    jr      nz,label_c41c                   ;[c420]
+    jr      nz,fdc_wait_busy                ;[c420]
     ret                                     ;[c422]
 
-    ld      b,$01                           ;[c423] 06 01
-    ld      a,c                             ;[c425] 79
-    and     $03                             ;[c426] e6 03
-    or      a                               ;[c428] b7
-    jr      z,label_c430                    ;[c429] 28 05
+fdc_baz_c423:
+    ld      b,$01                           ;[c423]
+    ld      a,c                             ;[c425]
+    and     $03                             ;[c426]
+    or      a                               ;[c428]
+    jr      z,label_c430                    ;[c429]
 label_c42b:
-    rlc     b                               ;[c42b] cb 00
-    dec     a                               ;[c42d] 3d
-    jr      nz,label_c42b                   ;[c42e] 20 fb
+    rlc     b                               ;[c42b]
+    dec     a                               ;[c42d]
+    jr      nz,label_c42b                   ;[c42e]
 label_c430:
-    ld      a,($ffc7)                       ;[c430] 3a c7 ff
-    ld      c,a                             ;[c433] 4f
-    and     b                               ;[c434] a0
-    ret     nz                              ;[c435] c0
-    ld      a,c                             ;[c436] 79
-    or      b                               ;[c437] b0
-    ld      ($ffc7),a                       ;[c438] 32 c7 ff
-    call    $c391                           ;[c43b] cd 91 c3
-    ret                                     ;[c43e] c9
+    ld      a,($ffc7)                       ;[c430]
+    ld      c,a                             ;[c433]
+    and     b                               ;[c434]
+    ret     nz                              ;[c435]
+    ld      a,c                             ;[c436]
+    or      b                               ;[c437]
+    ld      ($ffc7),a                       ;[c438]
+    call    fdc_track0_c391                 ;[c43b]
+    ret                                     ;[c43e]
 
     ; SUBROUTINE C43F
+    ; FDC initialization
     push    bc                              ;[c43f]
     push    hl                              ;[c440]
-    ld      hl,$c45c                        ;[c441] prepare HL for later
-    call    $c41c                           ;[c444] while( ioaddr(0xc0).4 == 1 ), wait
-    ld      c,$03                           ;[c447]
-    call    $c415                           ;[c449]
-    ld      c,(hl)                          ;[c44c]
+    ld      hl,fdc_cfg_base                 ;[c441] prepare HL to address FDC configuration table
+    call    fdc_wait_busy                   ;[c444] while( ioaddr(0xc0).4 == 1 ), wait
+    ld      c,$03                           ;[c447] send "specify" command
+    call    fdc_send_cmd                    ;[c449]
+    ld      c,(hl)                          ;[c44c] load first "specify" argument from table
     inc     hl                              ;[c44d]
-    call    $c415                           ;[c44e]
-    ld      c,(hl)                          ;[c451]
-    call    $c415                           ;[c452]
+    call    fdc_send_cmd                    ;[c44e] send SRT | HUT
+    ld      c,(hl)                          ;[c451] load second "specify" argument from table
+    call    fdc_send_cmd                    ;[c452] send HLT | ND
     xor     a                               ;[c455]
     ld      ($ffc7),a                       ;[c456]
     pop     hl                              ;[c459]
@@ -729,8 +783,9 @@ label_c430:
     ret                                     ;[c45b]
 
     ; STATIC DATA for C43F
-    BYTE $6f
-    BYTE $1b
+fdc_cfg_base:
+    BYTE $6f                                ;[c45c]
+    BYTE $1b                                ;[c45d] DMA mode is disabled
 
     ; SUBROUTINE C45E
 bios_putchar_c45e:
