@@ -180,30 +180,37 @@ label_c0e1:
     BYTE $02                                 ;[c106]
     BYTE $01                                 ;[c107]
 
+    ; SIO configuration routine
+    ; TODO: we are not sure (yet) what is channel A and what is channel B
+    ; but we know that
+    ; - Channel A runs at 153.6 kHz / 16 = 9600 bps (may be RS/232)
+    ; - Channel B runs at 19.2 kHz / 16 = 1200 bps  (may be keyboard)
     ld      hl,$c134                        ;[c108]
-    ; loop around $c134 table, writing to $b1
-label_c10b:
-    ld      a,(hl)                          ;[c10b] 7e
-    inc     hl                              ;[c10c] 23
-    cp      $ff                             ;[c10d] fe ff
-    jr      z,label_c119                    ;[c10f] 28 08
-    out     ($b1),a                         ;[c111] d3 b1
-    ld      a,(hl)                          ;[c113] 7e
-    out     ($b1),a                         ;[c114] d3 b1
-    inc     hl                              ;[c116] 23
-    jr      label_c10b                      ;[c117] 18 f2
 
-    ; loop around $c141 table, writing to $b3
+    ; loop around $c134 table, writing to $b1 (channel A?)
+label_c10b:
+    ld      a,(hl)                          ;[c10b] load index of internal SIO register
+    inc     hl                              ;[c10c] fetch next data
+    cp      $ff                             ;[c10d] check table end
+    jr      z,label_c119                    ;[c10f] if table end, configure channel B
+    out     ($b1),a                         ;[c111] index internal SIO register
+    ld      a,(hl)                          ;[c113] load desired internal SIO register value
+    out     ($b1),a                         ;[c114] write desidered internal SIO register value
+    inc     hl                              ;[c116] fetch next data
+    jr      label_c10b                      ;[c117] loop
+
+    ; loop around $c141 table, writing to $b3 (channel B?)
+    ; same as channel A
 label_c119:
-    ld      a,(hl)                          ;[c119] 7e
-    cp      $ff                             ;[c11a] fe ff
-    jr      z,label_c127                    ;[c11c] 28 09
-    out     ($b3),a                         ;[c11e] d3 b3
-    inc     hl                              ;[c120] 23
-    ld      a,(hl)                          ;[c121] 7e
-    out     ($b3),a                         ;[c122] d3 b3
-    inc     hl                              ;[c124] 23
-    jr      label_c119                      ;[c125] 18 f2
+    ld      a,(hl)                          ;[c119]
+    cp      $ff                             ;[c11a]
+    jr      z,label_c127                    ;[c11c]
+    out     ($b3),a                         ;[c11e]
+    inc     hl                              ;[c120]
+    ld      a,(hl)                          ;[c121]
+    out     ($b3),a                         ;[c122]
+    inc     hl                              ;[c124]
+    jr      label_c119                      ;[c125]
 
     ; Do some read from $b0/$b2
 label_c127:
@@ -217,21 +224,22 @@ label_c127:
 
     ; Configuration table for SIO ChA?
 sio_chA_cfg_base:
-    BYTE $00                                ;[c134]
-    BYTE $10                                ;[c135]
+    BYTE $00                                ;[c134] register 0
+    BYTE $10                                ;[c135] reset peripheral interrupts
     BYTE $00                                ;[c136]
     BYTE $10                                ;[c137]
-    BYTE $04                                ;[c138]
-    BYTE $44                                ;[c139]
-    BYTE $01                                ;[c13a]
-    BYTE $00                                ;[c13b]
-    BYTE $03                                ;[c13c]
-    BYTE $c1                                ;[c13d]
-    BYTE $05                                ;[c13e]
-    BYTE $ea                                ;[c13f]
-    BYTE $ff                                ;[c140]
+    BYTE $04                                ;[c138] register 4
+    BYTE $44                                ;[c139] 1 stop bit, /16 clock divider
+    BYTE $01                                ;[c13a] register 1
+    BYTE $00                                ;[c13b] disable all interrupts
+    BYTE $03                                ;[c13c] register 3
+    BYTE $c1                                ;[c13d] rx 8 bit word, synch character load inhibit
+    BYTE $05                                ;[c13e] register 5
+    BYTE $ea                                ;[c13f] enable tx, RTS, DTR, tx 8 bit word
+    BYTE $ff                                ;[c140] end of table
 
     ; Configuration table for SIO ChB?
+    ; Note: channel configuration is identical as above
 sio_chB_cfg_base:
     BYTE $00                                ;[c141]
     BYTE $10                                ;[c142]
