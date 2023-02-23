@@ -1,25 +1,29 @@
     org 0xc000
 
 PUBLIC _main
+    ; Interrupt Vector Table (?)
+    ; This looks like one
 _main:
     jp      $c030                           ;[c000] reset vector
-    jp      $c027                           ;[c003]
-    jp      $c027                           ;[c006]
+    jp      $c027                           ;[c003] reset SIO interrupts
+    jp      $c027                           ;[c006] reset SIO interrupts
     jp      $c45e                           ;[c009]
-    jp      $c027                           ;[c00c]
-    jp      $c027                           ;[c00f]
-    jp      $c027                           ;[c012]
-    jp      $c027                           ;[c015]
+    jp      $c027                           ;[c00c] reset SIO interrupts
+    jp      $c027                           ;[c00f] reset SIO interrupts
+    jp      $c027                           ;[c012] reset SIO interrupts
+    jp      $c027                           ;[c015] reset SIO interrupts
     jp      $c19d                           ;[c018]
     jp      $c18f                           ;[c01b]
     jp      $c174                           ;[c01e]
     jp      $cde2                           ;[c021]
     jp      $cdf4                           ;[c024]
+
+    ; disable SIO interrupts
 label_c027:
-    di                                      ;[c027]
-    ld      a,$10                           ;[c028]
-    out     ($b1),a                         ;[c02a]
-    out     ($b3),a                         ;[c02c]
+    di                                      ;[c027] disable interrupts
+    ld      a,$10                           ;[c028] load A with $10 (reset SIO interrupts)
+    out     ($b1),a                         ;[c02a] write SIO control of channel A
+    out     ($b3),a                         ;[c02c] write SIO control of channel B
     jr      label_c040                      ;[c02e]
 
     ; main entrypoint, after reset
@@ -42,13 +46,13 @@ label_c040:
     call    $c0c2                           ;[c043] initialize IO peripherals
     call    $c6af                           ;[c046] initialize display management variables
     call    $c14e                           ;[c049]
-    ld      a,$12                           ;[c04c]
-    out     ($b2),a                         ;[c04e]
+    ld      a,$12                           ;[c04c] load A with $12 (keyboard initialization)
+    out     ($b2),a                         ;[c04e] send keyboard configuration
 label_c050:
     in      a,($b3)                         ;[c050]
     bit     0,a                             ;[c052]
     jr      z,label_c050                    ;[c054]
-    in      a,($b2)                         ;[c056]
+    in      a,($b2)                         ;[c056] read A from keyboard
     out     ($da),a                         ;[c058]
     ld      c,$56                           ;[c05a] hardcoded 'V' for splash screen
     call    $c45e                           ;[c05c] putchar()
@@ -84,31 +88,32 @@ label_c088:
     out     ($da),a                         ;[c09a]
     jr      label_c088                      ;[c09c]
 label_c09e:
-    ld      a,$06                           ;[c09e]
-    out     ($b2),a                         ;[c0a0]
+    ld      a,$06                           ;[c09e] load A with $06
+    out     ($b2),a                         ;[c0a0] send to keyboard
     out     ($da),a                         ;[c0a2]
     jp      $0080                           ;[c0a4]
 
-    ; Current idle loop
-    ; At the moment, the PC hangs in this loop, reading 0x44 from $b3 IO
+    ; When no keyboard is connected, Sanco loops in this loop forever
 label_c0a7:
-    in      a,($b3)                         ;[c0a7]
-    bit     0,a                             ;[c0a9]
-    jr      z,label_c0a7                    ;[c0ab]
+    in      a,($b3)                         ;[c0a7] read SIO control register of channel B (keyboard)
+    bit     0,a                             ;[c0a9] test LSB (character available)
+    jr      z,label_c0a7                    ;[c0ab] if no char available, loop
 
-    in      a,($b2)                         ;[c0ad]
+    ; a char is available from keyboard
+    in      a,($b2)                         ;[c0ad] read A from keyboard
     ld      b,a                             ;[c0af]
     bit     7,a                             ;[c0b0]
-    jr      nz,label_c0a7                   ;[c0b2]
+    jr      nz,label_c0a7                   ;[c0b2] if A >= 128, discard char and read next one
 label_c0b4:
-    in      a,($b3)                         ;[c0b4]
+    in      a,($b3)                         ;[c0b4] read SIO control register of channel B (keyboard)
     bit     0,a                             ;[c0b6]
-    jr      z,label_c0b4                    ;[c0b8]
-    in      a,($b2)                         ;[c0ba]
+    jr      z,label_c0b4                    ;[c0b8] if no char available, loop
+
+    in      a,($b2)                         ;[c0ba] read A from keyboard
     ld      c,a                             ;[c0bc]
     bit     7,a                             ;[c0bd]
-    jr      z,label_c0b4                    ;[c0bf]
-    ret                                     ;[c0c1]
+    jr      z,label_c0b4                    ;[c0bf] if A >= 128, discard char and read next one
+    ret                                     ;[c0c1] (B,C) now holds (first,second) char read from keyboard
 
     ; SUBROUTINE C0C2
     im      2                               ;[c0c2] set interrupt mode 2
@@ -181,10 +186,12 @@ label_c0e1:
     BYTE $01                                 ;[c107]
 
     ; SIO configuration routine
-    ; TODO: we are not sure (yet) what is channel A and what is channel B
-    ; but we know that
-    ; - Channel A runs at 153.6 kHz / 16 = 9600 bps (may be RS/232)
-    ; - Channel B runs at 19.2 kHz / 16 = 1200 bps  (may be keyboard)
+    ; Channel A runs at 153.6 kHz / 16 = 9600 bps (user RS/232)
+    ; Channel B runs at 19.2 kHz / 16 = 1200 bps  (keyboard)
+    ; $b0   : channel A, data register
+    ; $b1   : channel A, control register
+    ; $b2   : channel B, data register
+    ; $b3   : channel B, control register
     ld      hl,$c134                        ;[c108]
 
     ; loop around $c134 table, writing to $b1 (channel A?)
