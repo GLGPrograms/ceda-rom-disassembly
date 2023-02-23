@@ -204,7 +204,7 @@ label_c0e1:
     ; $b3   : channel B, control register
     ld      hl,$c134                        ;[c108]
 
-    ; loop around $c134 table, writing to $b1 (channel A?)
+    ; loop around $c134 table, writing to $b1 (channel A)
 label_c10b:
     ld      a,(hl)                          ;[c10b] load index of internal SIO register
     inc     hl                              ;[c10c] fetch next data
@@ -216,7 +216,7 @@ label_c10b:
     inc     hl                              ;[c116] fetch next data
     jr      label_c10b                      ;[c117] loop
 
-    ; loop around $c141 table, writing to $b3 (channel B?)
+    ; loop around $c141 table, writing to $b3 (channel B)
     ; same as channel A
 label_c119:
     ld      a,(hl)                          ;[c119]
@@ -229,15 +229,15 @@ label_c119:
     inc     hl                              ;[c124]
     jr      label_c119                      ;[c125]
 
-    ; Do some read from $b0/$b2
+    ; Each SIO channel has a 3 word RX FIFO: flush them.
 label_c127:
-    in      a,($b0)                         ;[c127] db b0
-    in      a,($b2)                         ;[c129] db b2
-    in      a,($b0)                         ;[c12b] db b0
-    in      a,($b2)                         ;[c12d] db b2
-    in      a,($b0)                         ;[c12f] db b0
-    in      a,($b2)                         ;[c131] db b2
-    ret                                     ;[c133] c9
+    in      a,($b0)                         ;[c127] read channel A data register (and discard)
+    in      a,($b2)                         ;[c129] read channel B data register (and discard)
+    in      a,($b0)                         ;[c12b]
+    in      a,($b2)                         ;[c12d]
+    in      a,($b0)                         ;[c12f]
+    in      a,($b2)                         ;[c131]
+    ret                                     ;[c133]
 
     ; Configuration table for SIO ChA?
 sio_chA_cfg_base:
