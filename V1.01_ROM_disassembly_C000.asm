@@ -122,7 +122,7 @@ label_c0b4:
     in      a,($b2)                         ;[c0ba] read A from keyboard
     ld      c,a                             ;[c0bc]
     bit     7,a                             ;[c0bd]
-    jr      z,label_c0b4                    ;[c0bf] if A >= 128, discard char and read next one
+    jr      z,label_c0b4                    ;[c0bf] if A < 128, discard char and read next one
     ret                                     ;[c0c1] (B,C) now holds (first,second) char read from keyboard
 
     ; SUBROUTINE C0C2
