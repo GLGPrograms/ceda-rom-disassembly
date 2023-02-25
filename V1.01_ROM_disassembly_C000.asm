@@ -339,21 +339,21 @@ label_c19b:
 
     ; FDC Read Write Format Seek routine.
     ; Arguments:
-    ; a: TODO
-    ; b: operation command, see switch in this routine
-    ; c: drive number (0-3) + HD flag
-    ; d: track number
-    ; e: head number
-    ; hl: read/write buffer address
+    ; - a: bytes per sector "shift factor", bps = 0x80 << a - found here: https://www.cpcwiki.eu/index.php/765_FDC
+    ; - b: operation command, see switch in this routine
+    ; - c: drive number (0-3) + HD flag
+    ; - d: track number
+    ; - e: head number
+    ; - hl: read/write buffer address
 fdc_rwfs_c19d:
     push    bc                              ;[c19d]
     push    de                              ;[c19e]
     push    hl                              ;[c19f]
-    ld      ($ffb8),a                       ;[c1a0] TODO
+    ld      ($ffb8),a                       ;[c1a0] bytes per sector
     ld      a,$0a                           ;[c1a3]
     ld      ($ffbf),a                       ;[c1a5] value used in error checking routines
     ld      ($ffb9),bc                      ;[c1a8] *$ffb9 = drive no. + HD flag, *$ffba = operation command
-    ld      ($ffbb),de                      ;[c1ac] *$ffbb = track number, *$ffbc = head index (0/1)
+    ld      ($ffbb),de                      ;[c1ac] *$ffbb = head index (0/1), *$ffbc = track number
     ld      ($ffbd),hl                      ;[c1b0] base address for read/write buffer
     call    fdc_baz_c423                    ;[c1b3] TODO
     ld      a,($ffba)                       ;[c1b6] load command byte
@@ -401,7 +401,7 @@ fdc_write_retry_c1f7:
     ld      c,$c5                           ;[c1fe] load "write data" command with MT and MF flags set
     ld      a,($ffb8)                       ;[c200]
     or      a                               ;[c203]
-    jr      nz,label_c208                   ;[c204] if *ffb8 == 0...
+    jr      nz,label_c208                   ;[c204] if *ffb8 == 0 (128 bytes per sector)...
     res     6,c                             ;[c206] ...clear MF flag (FM mode)
 label_c208:
     call    fdc_send_cmd                    ;[c208] send the "write data" command with desired MF flag
@@ -453,7 +453,7 @@ fdc_read_retry_c24d:
     ld      c,$c6                           ;[c254] load "read data" command with MT and MF flags set
     ld      a,($ffb8)                       ;[c256]
     or      a                               ;[c259]
-    jr      nz,label_c25e                   ;[c25a] if *ffb8 == 0...
+    jr      nz,label_c25e                   ;[c25a] if *ffb8 == 0 (128 bytes per sector)...
     res     6,c                             ;[c25c] ...clear MF flag (FM mode)
 label_c25e:
     call    fdc_send_cmd                    ;[c25e] send the "read data" command
@@ -509,26 +509,32 @@ label_c2ab:
 label_c2b6:
     ret                                     ;[c2b6]
 
-    ; TODO: calculate number of bytesper sector. Result is in de.
+    ; Compute number of bytes per sector
+    ; Arguments:
+    ; - $ffb8: bytes per sector "shift factor". If = 0, FM encoding is used. If != 0, MFM encoding is used
+    ; - $ffba: lower nibble, manually add some more bps (TODO)
+    ; - $ffbb: sector number (only bit 7 is considered)
+    ; Return:
+    ; - de: bytes per sector
 fdc_compute_bps_c2b7:
     ld      e,$00                           ;[c2b7] e = 0
-    ld      a,($ffb8)                       ;[c2b9] load FM/MFM mode
-    cp      $03                             ;[c2bc] TODO
-    jr      nz,label_c2d4                   ;[c2be] jmp if *(ffb8) != 3
-    ld      d,$04                           ;[c2c0]
-    ld      a,($ffbb)                       ;[c2c2] load track number
+    ld      a,($ffb8)                       ;[c2b9] load bytes per sector
+    cp      $03                             ;[c2bc]
+    jr      nz,label_c2d4                   ;[c2be] if 1024 bytes per sector (*$ffb8 == 3)...
+    ld      d,$04                           ;[c2c0] ... d = 4
+    ld      a,($ffbb)                       ;[c2c2] load sector number
     bit     7,a                             ;[c2c5]
-    jr      z,label_c2e2                    ;[c2c7]
+    jr      z,label_c2e2                    ;[c2c7] if MSb is not set, return
     ld      a,($ffba)                       ;[c2c9] load (lower nibble of) operation command
     and     $0f                             ;[c2cc]
     rlca                                    ;[c2ce]
     rlca                                    ;[c2cf]
     add     d                               ;[c2d0]
     ld      d,a                             ;[c2d1] d = ((*$ffba & 0xf) + 1) * 4
-    jr      label_c2e2                      ;[c2d2] return
-label_c2d4:
+    jr      label_c2e2                      ;[c2d2] return, d as above, e = 0
+label_c2d4:                                 ;       if bytes per sector != 1024...
     or      a                               ;[c2d4]
-    jr      nz,label_c2d9                   ;[c2d5] jmp if *(ffb8) != 0
+    jr      nz,label_c2d9                   ;[c2d5] if bytes per sector != 128 (*$ffb8 = 0)...
     ld      e,$80                           ;[c2d7] e = 128
 label_c2d9:
     ld      a,($ffba)                       ;[c2d9] load (lower nibble of) operation command
@@ -541,37 +547,37 @@ label_c2e2:
 
     ; TODO formatting routine
 fdc_format_c2e3:
-    call    fdc_seek_c3a9                   ;[c2e3]
-    cp      $ff                             ;[c2e6]
-    ret     z                               ;[c2e8]
-    ld      b,$14                           ;[c2e9]
-    ld      a,($ffb8)                       ;[c2eb]
+    call    fdc_seek_c3a9                   ;[c2e3] move to desired track
+    cp      $ff                             ;[c2e6] if not able to locate track...
+    ret     z                               ;[c2e8] ...return
+    ld      b,$14                           ;[c2e9] b default value is 20
+    ld      a,($ffb8)                       ;[c2eb] a is bytes per sector
     cp      $03                             ;[c2ee]
-    jr      z,label_c2f4                    ;[c2f0]
-    ld      b,$40                           ;[c2f2]
+    jr      z,label_c2f4                    ;[c2f0] if less than 1024 bytes per sector...
+    ld      b,$40                           ;[c2f2] b = 64
 label_c2f4:
     push    bc                              ;[c2f4]
     call    fdc_wait_busy                   ;[c2f5]
     ld      c,$4d                           ;[c2f8]
     call    fdc_send_cmd                    ;[c2fa] send "write id" command
-    ld      bc,($ffb9)                      ;[c2fd] 1st argument: drive number
+    ld      bc,($ffb9)                      ;[c2fd] 1st argument: drive number (c <= *$ffb9)
     call    fdc_send_cmd                    ;[c301]
-    ld      a,($ffb8)                       ;[c304] 2nd argument: number of bytes per sector
+    ld      a,($ffb8)                       ;[c304] 2nd argument: bytes per sector "factor"
     ld      c,a                             ;[c307]
     call    fdc_send_cmd                    ;[c308]
-    ld      c,$05                           ;[c30b] default sectors/track number
-    ld      a,($ffb8)                       ;[c30d]
+    ld      c,$05                           ;[c30b] default sectors/track number, 5
+    ld      a,($ffb8)                       ;[c30d] same as before, load formatting encoding in a
     cp      $03                             ;[c310]
     jr      z,label_c316                    ;[c312]
-    ld      c,$10                           ;[c314]
+    ld      c,$10                           ;[c314] if *$ffb8 != 3, sectors/track = 16
 label_c316:
     call    fdc_send_cmd                    ;[c316] 3rd argument: sectors/track number
-    ld      c,$28                           ;[c319]
+    ld      c,$28                           ;[c319] gap length is 40
     call    fdc_send_cmd                    ;[c31b] 4rd argument: gap3 length
-    di                                      ;[c31e]
+    di                                      ;[c31e] disable interrupts
     ld      c,$e5                           ;[c31f]
     call    fdc_send_cmd                    ;[c321] 5th argument: filler byte value
-    pop     bc                              ;[c324]
+    pop     bc                              ;[c324] reload bytes per sector in b
     ld      c,$c1                           ;[c325]
     ld      hl,($ffbd)                      ;[c327]
 label_c32a:
@@ -602,7 +608,7 @@ fdc_send_rw_args_c34e:
     ld      bc,($ffb9)                      ;[c34e] 1st argument: load drive number
     call    fdc_send_cmd                    ;[c352]
     ld      de,($ffbb)                      ;[c355] 2nd argument: cylinder number
-    ld      c,d                             ;[c359]
+    ld      c,d                             ;[c359] track is in d <= *$ffbc
     call    fdc_send_cmd                    ;[c35a]
     ld      bc,($ffb9)                      ;[c35d] ffb9 contains HD flag too (physical head number)
     ld      a,c                             ;[c361]
@@ -631,7 +637,7 @@ label_c383:
     call    fdc_send_cmd                    ;[c38d] 8th argument: DTL - data length, should be invalid if 5th argument is != 0
     ret                                     ;[c390]
 
-; This routine seems to move the floppy head to track 0, then waits for the operation execution
+    ; This routine seems to move the floppy head to track 0, then waits for the operation execution
 fdc_track0_c391 :
     call    fdc_wait_busy                   ;[c391] cd 1c c4
     ld      c,$07                           ;[c394] Recalibrate command
@@ -646,19 +652,19 @@ fdc_track0_c391 :
 
     ; FDC: sends the seek command and move head upon desired cylinder
     ; Arguments:
-    ; $ffbb: new cylinder number
-    ; $ffb9: drive number
+    ; - $ffbb: new track number
+    ; - $ffb9: drive number
 fdc_seek_c3a9:
-    ld      de,($ffbb)                      ;[c3a9]
-    ld      a,d                             ;[c3ad]
-    or      a                               ;[c3ae]
-    jp      z,fdc_track0_c391               ;[c3af] If desired cylinder is 0, skip this and call appropriate routine
+    ld      de,($ffbb)                      ;[c3a9] load track number
+    ld      a,d                             ;[c3ad] track number is in d <= *$ffbc
+    or      a                               ;[c3ae] check if requested track is 0...
+    jp      z,fdc_track0_c391               ;[c3af] if track = 0, skip this and call appropriate routine
     call    fdc_wait_busy                   ;[c3b2]
-    ld      c,$0f                           ;[c3b5] Send "seek" command
+    ld      c,$0f                           ;[c3b5] send "seek" command
     call    fdc_send_cmd                    ;[c3b7]
-    ld      bc,($ffb9)                      ;[c3ba] 1st arg: load and send drive number + HD flag
+    ld      bc,($ffb9)                      ;[c3ba] 1st arg: load and send *$ffb9 = drive number + HD flag
     call    fdc_send_cmd                    ;[c3be]
-    ld      c,d                             ;[c3c1] 2nd arg: send NCN (new cylinder number) = desired position of head
+    ld      c,d                             ;[c3c1] 2nd arg: send NCN (new cylinder number) = desired track
     call    fdc_send_cmd                    ;[c3c2]
     call    fdc_sis_c3d2                    ;[c3c5]
     jr      nz,label_c3d0                   ;[c3c8] (i think) wait until completion. On failure:
