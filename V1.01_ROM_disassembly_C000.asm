@@ -74,12 +74,12 @@ bios_waitkey:
     jr      nz,bios_waitkey                 ;[c075] repeat if getchar() != $5C (F15)
     ; Boot trampoline executed when F15 key is pressed
     ld      a,($8000)                       ;[c077]
-    cpl                                     ;[c07a]
-    ld      ($8000),a                       ;[c07b]
-    ld      a,($8000)                       ;[c07e]
-    cp      $c3                             ;[c081]
+    cpl                                     ;[c07a] a = ~(*$8000)
+    ld      ($8000),a                       ;[c07b] write back...
+    ld      a,($8000)                       ;[c07e] ...and read again
+    cp      $c3                             ;[c081] check if equal to $C3 (which is absolute JMP opcode)
     jr      nz,label_c027                   ;[c083]
-    jp      $8000                           ;[c085]
+    jp      $8000                           ;[c085] then jump there
 
     ; Boot trampoline executed when BOOT key is pressed
 bios_bootkey:
