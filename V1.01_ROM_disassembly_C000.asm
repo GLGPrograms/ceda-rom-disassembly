@@ -12,7 +12,7 @@ _main:
     jp      $c027                           ;[c00f] reset SIO interrupts
     jp      $c027                           ;[c012] reset SIO interrupts
     jp      $c027                           ;[c015] reset SIO interrupts
-    jp      fdc_rwfs_c19d                   ;[c018]
+    jp      fdc_rwfs_c19d                   ;[c018] floppy disk software driver
     jp      $c18f                           ;[c01b]
     jp      $c174                           ;[c01e]
     jp      $cde2                           ;[c021]
@@ -65,21 +65,26 @@ label_c064:
     djnz    label_c064                      ;[c069]
 
     ; Boot procedure: execute a routine associated to a keypress
+    ; - if BOOT, execute bios_bootkey
+    ; - if F15, execute bios_boot_from_8000
 bios_waitkey:
-    call    $c0a7                           ;[c06b] read from keyboard
+    call    $c0a7                           ;[c06b] getchar()
     ld      a,b                             ;[c06e]
     cp      $4d                             ;[c06f]
     jr      z,bios_bootkey                  ;[c071] jump if getchar() == $4D (BOOT key)
     cp      $5c                             ;[c073]
     jr      nz,bios_waitkey                 ;[c075] repeat if getchar() != $5C (F15)
+
     ; Boot trampoline executed when F15 key is pressed
-    ld      a,($8000)                       ;[c077]
-    cpl                                     ;[c07a] a = ~(*$8000)
+    ; Check signature: trampoline is identified by a magic $3C
+bios_boot_from_8000:
+    ld      a,($8000)                       ;[c077] a = (*$8000)
+    cpl                                     ;[c07a] a = ~a
     ld      ($8000),a                       ;[c07b] write back...
     ld      a,($8000)                       ;[c07e] ...and read again
     cp      $c3                             ;[c081] check if equal to $C3 (which is absolute JMP opcode)
-    jr      nz,label_c027                   ;[c083]
-    jp      $8000                           ;[c085] then jump there
+    jr      nz,label_c027                   ;[c083] if not, reset computer...
+    jp      $8000                           ;[c085] ...else, execute trampoline at $8000
 
     ; Boot trampoline executed when BOOT key is pressed
 bios_bootkey:
@@ -89,10 +94,11 @@ bios_bootkey:
     ld      a,$01                           ;[c091] formatting mode, seems to be 180 bytes per sector
     call    fdc_rwfs_c19d                   ;[c093] invoke reading
     cp      $ff                             ;[c096] check for error...
-    jr      nz,label_c09e                   ;[c098] ...if ok, go on with loading
+    jr      nz,bios_bootdisk                ;[c098] ...if ok, go on with loading
     out     ($da),a                         ;[c09a] ... else, beep and try again
     jr      bios_bootkey                    ;[c09c]
-label_c09e:
+    ; if disk has been correctly copied into RAM, execute it
+bios_bootdisk:
     ld      a,$06                           ;[c09e] load A with $06
     out     ($b2),a                         ;[c0a0] send to keyboard
     out     ($da),a                         ;[c0a2]
