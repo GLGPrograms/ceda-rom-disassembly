@@ -83,8 +83,8 @@ bios_waitkey:
 
     ; Boot trampoline executed when BOOT key is pressed
 bios_bootkey:
-    ld      de,$0000                        ;[c088] track = 0, sector = 0
-    ld      bc,$4000                        ;[c08b] drive = 0, cmd = read ($40)
+    ld      de,$0000                        ;[c088] d = track = 0; e = sector = 0
+    ld      bc,$4000                        ;[c08b] b = cmd = read ($40); c = drive = 0
     ld      hl,$0080                        ;[c08e] load in $0080
     ld      a,$01                           ;[c091] formatting mode, seems to be 180 bytes per sector
     call    fdc_rwfs_c19d                   ;[c093] invoke reading
@@ -340,8 +340,8 @@ label_c19b:
     ; FDC Read Write Format Seek routine.
     ; Arguments:
     ; a: TODO
-    ; b: drive number (0-3) + HD flag
-    ; c: operation command, see switch in this routine
+    ; b: operation command, see switch in this routine
+    ; c: drive number (0-3) + HD flag
     ; d: track number
     ; e: head number
     ; hl: read/write buffer address
