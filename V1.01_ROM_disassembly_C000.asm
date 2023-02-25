@@ -68,12 +68,12 @@ label_c064:
     ; - if BOOT, execute bios_bootkey
     ; - if F15, execute bios_boot_from_8000
 bios_waitkey:
-    call    $c0a7                           ;[c06b] getchar()
+    call    kbd_getchar                     ;[c06b] kbd_getchar()
     ld      a,b                             ;[c06e]
     cp      $4d                             ;[c06f]
-    jr      z,bios_bootkey                  ;[c071] jump if getchar() == $4D (BOOT key)
+    jr      z,bios_bootkey                  ;[c071] jump if kbd_getchar() == $4D (BOOT key)
     cp      $5c                             ;[c073]
-    jr      nz,bios_waitkey                 ;[c075] repeat if getchar() != $5C (F15)
+    jr      nz,bios_waitkey                 ;[c075] repeat if kbd_getchar() != $5C (F15)
 
     ; Boot trampoline executed when F15 key is pressed
     ; Check signature: trampoline is identified by a magic $3C
@@ -104,7 +104,7 @@ bios_bootdisk:
     out     ($da),a                         ;[c0a2]
     jp      $0080                           ;[c0a4] execute fresh code from ram
 
-    ; SUBROUTINE C0A7
+    ; SUBROUTINE C0A7: kbd_getchar()
     ; Read from keyboard
     ; Returns in (B,C) = (first,second)
 
@@ -113,16 +113,16 @@ bios_bootdisk:
     ;    |-----------------------|
 
     ; When no keyboard is connected, Sanco loops in this loop forever
-label_c0a7:
+kbd_getchar:
     in      a,($b3)                         ;[c0a7] read SIO control register of channel B (keyboard)
     bit     0,a                             ;[c0a9] test LSB (character available)
-    jr      z,label_c0a7                    ;[c0ab] if no char available, loop
+    jr      z,kbd_getchar                   ;[c0ab] if no char available, loop
 
     ; a char is available from keyboard
     in      a,($b2)                         ;[c0ad] read A from keyboard
     ld      b,a                             ;[c0af]
     bit     7,a                             ;[c0b0]
-    jr      nz,label_c0a7                   ;[c0b2] if A >= 128, discard char and read next one
+    jr      nz,kbd_getchar                  ;[c0b2] if A >= 128, discard char and read next one
 label_c0b4:
     in      a,($b3)                         ;[c0b4] read SIO control register of channel B (keyboard)
     bit     0,a                             ;[c0b6]
