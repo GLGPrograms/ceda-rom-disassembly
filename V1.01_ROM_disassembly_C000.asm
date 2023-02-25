@@ -64,7 +64,7 @@ label_c064:
     call    $c45e                           ;[c066] putchar()
     djnz    label_c064                      ;[c069]
 
-; Boot procedure: execute a routine associated to a keypress
+    ; Boot procedure: execute a routine associated to a keypress
 bios_waitkey:
     call    $c0a7                           ;[c06b] read from keyboard
     ld      a,b                             ;[c06e]
@@ -72,7 +72,7 @@ bios_waitkey:
     jr      z,bios_bootkey                  ;[c071] jump if getchar() == $4D (BOOT key)
     cp      $5c                             ;[c073]
     jr      nz,bios_waitkey                 ;[c075] repeat if getchar() != $5C (F15)
-; Boot trampoline executed when F15 key is pressed
+    ; Boot trampoline executed when F15 key is pressed
     ld      a,($8000)                       ;[c077]
     cpl                                     ;[c07a]
     ld      ($8000),a                       ;[c07b]
@@ -81,7 +81,7 @@ bios_waitkey:
     jr      nz,label_c027                   ;[c083]
     jp      $8000                           ;[c085]
 
-; Boot trampoline executed when BOOT key is pressed
+    ; Boot trampoline executed when BOOT key is pressed
 bios_bootkey:
     ld      de,$0000                        ;[c088] track = 0, sector = 0
     ld      bc,$4000                        ;[c08b] drive = 0, cmd = read ($40)
