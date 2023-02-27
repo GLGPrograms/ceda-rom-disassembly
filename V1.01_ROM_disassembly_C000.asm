@@ -1129,34 +1129,55 @@ label_c6e3:
     ld      ($ffd6),iy                      ;[c6ec]
     ret                                     ;[c6f0]
 
-    push    af                              ;[c6f1] f5
-    push    bc                              ;[c6f2] c5
-    push    de                              ;[c6f3] d5
-    push    ix                              ;[c6f4] dd e5
-    pop     hl                              ;[c6f6] e1
-    ld      de,$0050                        ;[c6f7] 11 50 00
-    ld      a,b                             ;[c6fa] 78
-    ld      b,$05                           ;[c6fb] 06 05
+    ; SUBROUTINE C6F1; display_add_row_column()
+    ; Linearize row and column coordinates, and add to IX
+    ; Input:
+    ;   - B: number of row
+    ;   - C: number of column
+    ; Output:
+    ;   HL = IX + 80 * B + C
+display_add_row_column:
+    ; function prologue, save registers
+    push    af                              ;[c6f1]
+    push    bc                              ;[c6f2]
+    push    de                              ;[c6f3]
+
+    push    ix                              ;[c6f4]
+    pop     hl                              ;[c6f6] HL = IX
+
+    ; prepare add-and-shift multiplication
+    ld      de,$0050                        ;[c6f7] DE = 80 (display columns)
+    ld      a,b                             ;[c6fa] A = B
+                                            ;       Maximum number of row is 25, which stays on 5 bits,
+                                            ;       then do this add-and-shift multiplication for 5 times max
+    ld      b,$05                           ;[c6fb] B = 5
+
+    ; perform add-and-shift multiplication loop
 label_c6fd:
-    rra                                     ;[c6fd] 1f
-    jr      nc,label_c701                   ;[c6fe] 30 01
-    add     hl,de                           ;[c700] 19
+    rra                                     ;[c6fd] extract lsb of A
+    jr      nc,label_c701                   ;[c6fe] if bit == 1, then
+    add     hl,de                           ;[c700]     HL += 80 (add...)
 label_c701:
-    or      a                               ;[c701] b7
-    rl      e                               ;[c702] cb 13
-    rl      d                               ;[c704] cb 12
-    dec     b                               ;[c706] 05
-    jr      nz,label_c6fd                   ;[c707] 20 f4
-    ld      d,$00                           ;[c709] 16 00
-    ld      e,c                             ;[c70b] 59
-    add     hl,de                           ;[c70c] 19
-    ld      a,h                             ;[c70d] 7c
-    and     $0f                             ;[c70e] e6 0f
-    ld      h,a                             ;[c710] 67
-    pop     de                              ;[c711] d1
-    pop     bc                              ;[c712] c1
-    pop     af                              ;[c713] f1
-    ret                                     ;[c714] c9
+    or      a                               ;[c701] reset carry flag
+    rl      e                               ;[c702]
+    rl      d                               ;[c704] DE *= 2 (...and shift)
+    dec     b                               ;[c706] --B
+    jr      nz,label_c6fd                   ;[c707] if B > 0, loop
+
+    ; add C
+    ld      d,$00                           ;[c709]
+    ld      e,c                             ;[c70b]
+    add     hl,de                           ;[c70c] HL += C
+    ld      a,h                             ;[c70d]
+    and     $0f                             ;[c70e]
+    ld      h,a                             ;[c710] clamp final value to 0xFFF (4096 - 1)
+                                            ;       result is left in HL
+
+    ; function epilogue, restore registers
+    pop     de                              ;[c711]
+    pop     bc                              ;[c712]
+    pop     af                              ;[c713]
+    ret                                     ;[c714]
 
     ; SUBROUTINE 0xC715; compute current video memory pointer from current cursor
     ; arguments:
