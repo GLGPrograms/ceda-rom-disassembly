@@ -137,7 +137,7 @@ label_c0b4:
     ; SUBROUTINE C0C2
     im      2                               ;[c0c2] set interrupt mode 2
     call    $c0d1                           ;[c0c4] initialize timer ($e0)
-    call    $c43f                           ;[c0c7] setup $c0 peripheral?
+    call    fdc_init                        ;[c0c7] initialize floppy drive controller ($c0)
     call    $c108                           ;[c0ca] setup SIO ($b0 peripheral)
     call    $c88d                           ;[c0cd] setup CRTC ($a0) and do some stuff with bank switch? ($80)
     ret                                     ;[c0d0]
@@ -361,7 +361,7 @@ fdc_rwfs_c19d:
     ld      ($ffb9),bc                      ;[c1a8] *$ffb9 = drive no. + HD flag, *$ffba = operation command
     ld      ($ffbb),de                      ;[c1ac] *$ffbb = head index (0/1), *$ffbc = track number
     ld      ($ffbd),hl                      ;[c1b0] base address for read/write buffer
-    call    fdc_baz_c423                    ;[c1b3] TODO
+    call    fdc_initialize_drive_c423       ;[c1b3] move head to track 0 if never done before on current drive
     ld      a,($ffba)                       ;[c1b6] load command byte
     and     $f0                             ;[c1b9]
     jp      z,fdc_sw_track0                 ;[c1bb] case $00: move to track 0 (home)
@@ -391,13 +391,14 @@ fdc_sw_format:
     call    fdc_format_c2e3                 ;[c1eb]
     jr      fdc_sw_default                  ;[c1ee]
 fdc_sw_default:
-    pop     hl                              ;[c1f0] e1
-    pop     de                              ;[c1f1] d1
-    pop     bc                              ;[c1f2] c1
-    ret                                     ;[c1f3] c9
+    pop     hl                              ;[c1f0]
+    pop     de                              ;[c1f1]
+    pop     bc                              ;[c1f2]
+    ret                                     ;[c1f3]
 
     ; FDC write data routine
     ; Writes data from *$ffbd to desired track/sector
+    ; Arguments are stored in $ffb8-$ffbf, as explained in caller fdc_rwfs_c19d
 fdc_write_data_c1f4:
     call    fdc_seek_c3a9                   ;[c1f4] move to desired track
 fdc_write_retry_c1f7:
@@ -450,6 +451,7 @@ label_c248:
 
     ; FDC read data routine
     ; Read data from desired track/sector to *$ffbd
+    ; Arguments are stored in $ffb8-$ffbf, as explained in caller fdc_rwfs_c19d
 fdc_read_data_c24a:
     call    fdc_seek_c3a9                   ;[c24a] move to desired track
 fdc_read_retry_c24d:
@@ -507,7 +509,7 @@ fdc_err_check_c2a0:
     call    fdc_track0_c391                 ;[c2a7] reset head position if bit 4 is set
     ret                                     ;[c2aa]
 label_c2ab:
-    ld      a,($ffc1)                       ;[c2ab] read 2nd status byte after cmd execution (ST2)
+    ld      a,($ffc1)                       ;[c2ab] read 2nd status byte after cmd execution (ST1)
     bit     0,a                             ;[c2ae]
     jr      z,label_c2b6                    ;[c2b0]
     call    fdc_track0_c391                 ;[c2b2] reset head position if bit 0 is set
@@ -551,7 +553,8 @@ label_c2d9:
 label_c2e2:
     ret                                     ;[c2e2]
 
-    ; TODO formatting routine
+    ; Format floppy disk
+    ; Arguments are stored in $ffb8-$ffbf, as explained in caller fdc_rwfs_c19d
 fdc_format_c2e3:
     call    fdc_seek_c3a9                   ;[c2e3] move to desired track
     cp      $ff                             ;[c2e6] if not able to locate track...
@@ -601,19 +604,19 @@ label_c33a:
     call    fdc_rw_status_c3f4              ;[c33d] command response, put it in $ffc0-$ffc6
     ld      a,($ffc0)                       ;[c340]
     and     $c0                             ;[c343]
-    cp      $40                             ;[c345]
-    jr      nz,label_c34c                   ;[c347]
-    ld      a,$ff                           ;[c349]
+    cp      $40                             ;[c345] TODO check for error
+    jr      nz,label_c34c                   ;[c347] TODO jump if ok or fail?
+    ld      a,$ff                           ;[c349] return -1?
     ret                                     ;[c34b]
 label_c34c:
-    xor     a                               ;[c34c]
+    xor     a                               ;[c34c] return 0
     ret                                     ;[c34d]
 
-    ; FDC send arguments of "write data" command
+    ; FDC utility function: send arguments for read or write data commands
 fdc_send_rw_args_c34e:
     ld      bc,($ffb9)                      ;[c34e] 1st argument: load drive number
     call    fdc_send_cmd                    ;[c352]
-    ld      de,($ffbb)                      ;[c355] 2nd argument: cylinder number
+    ld      de,($ffbb)                      ;[c355] 2nd argument: track number
     ld      c,d                             ;[c359] track is in d <= *$ffbc
     call    fdc_send_cmd                    ;[c35a]
     ld      bc,($ffb9)                      ;[c35d] ffb9 contains HD flag too (physical head number)
@@ -623,20 +626,20 @@ fdc_send_rw_args_c34e:
     rrca                                    ;[c365] Move in bit 0 position
     ld      c,a                             ;[c366]
     call    fdc_send_cmd                    ;[c367] 3rd argument: head number (0/1)
-    res     7,e                             ;[c36a]
+    res     7,e                             ;[c36a] reset bit 7 in e (sector number register loaded before)
     ld      c,e                             ;[c36c]
-    inc     c                               ;[c36d]
+    inc     c                               ;[c36d] hypothesys: sector number - 1 is stored in $ffbb
     call    fdc_send_cmd                    ;[c36e] 4th argument: sector number to write
     ld      a,($ffb8)                       ;[c371]
     ld      c,a                             ;[c374]
-    call    fdc_send_cmd                    ;[c375] 5th argument: number of bytes to write in sector
-    ld      c,$05                           ;[c378]
-    ld      a,($ffb8)                       ;[c37a]
+    call    fdc_send_cmd                    ;[c375] 5th argument: bytes per sector "factor"
+    ld      c,$05                           ;[c378] default value for EOT = 5
+    ld      a,($ffb8)                       ;[c37a] load bytes per sector "factor"
     cp      $03                             ;[c37d]
-    jr      z,label_c383                    ;[c37f]
-    ld      c,$10                           ;[c381]
+    jr      z,label_c383                    ;[c37f] if less than 1024 bytes per sector...
+    ld      c,$10                           ;[c381] override EOT with c = 16
 label_c383:
-    call    fdc_send_cmd                    ;[c383] 6th argument: EOT - final sector of a cylinder
+    call    fdc_send_cmd                    ;[c383] 6th argument: EOT - final sector of a track
     ld      c,$28                           ;[c386]
     call    fdc_send_cmd                    ;[c388] 7th argument: GPL - gap length fixed to 0x28
     ld      c,$ff                           ;[c38b]
@@ -644,8 +647,8 @@ label_c383:
     ret                                     ;[c390]
 
     ; This routine seems to move the floppy head to track 0, then waits for the operation execution
-fdc_track0_c391 :
-    call    fdc_wait_busy                   ;[c391] cd 1c c4
+fdc_track0_c391:
+    call    fdc_wait_busy                   ;[c391]
     ld      c,$07                           ;[c394] Recalibrate command
     call    fdc_send_cmd                    ;[c396] Send command to FDC
     ld      bc,($ffb9)                      ;[c399] Load drive number?
@@ -656,7 +659,7 @@ fdc_track0_c391 :
     xor     a                               ;[c3a7] Clear a
     ret                                     ;[c3a8]
 
-    ; FDC: sends the seek command and move head upon desired cylinder
+    ; FDC: sends the seek command and move head upon desired track
     ; Arguments:
     ; - $ffbb: new track number
     ; - $ffb9: drive number
@@ -674,13 +677,13 @@ fdc_seek_c3a9:
     call    fdc_send_cmd                    ;[c3c2]
     call    fdc_sis_c3d2                    ;[c3c5]
     jr      nz,label_c3d0                   ;[c3c8] (i think) wait until completion. On failure:
-    call    fdc_track0_c391                 ;[c3ca] ...move head to cylinder 0...
+    call    fdc_track0_c391                 ;[c3ca] ...move head to track 0...
     jp      fdc_seek_c3a9                   ;[c3cd] ...and try again
 label_c3d0:
     xor     a                               ;[c3d0] On success, a=0 and return
     ret                                     ;[c3d1]
 
-    ; FDC: Sends the Sense Interrupt Status command and reads the two bytes (STO, PCN)
+    ; FDC utility function: send "Sense Interrupt Status" command and read the two bytes (STO, PCN)
 fdc_sis_c3d2:
     in      a,($82)                         ;[c3d2]
     bit     2,a                             ;[c3d4]
@@ -699,23 +702,22 @@ fdc_sis_c3d2:
     cp      $40                             ;[c3f1]
     ret                                     ;[c3f3]
 
-    ; FDC response reader. After read/write/format execution, a 7 byte response is given.
-    ; Read it all in $ffc0-$ffc6
+    ; FDC utility function: read response after read/write/format execution.
+    ; A 7 byte response is given, read it all in $ffc0-$ffc6
 fdc_rw_status_c3f4:
     ld      hl,$ffc0                        ;[c3f4] buffer pointer
     ld      b,$07                           ;[c3f7] data length, answer is 7 byte long
     ld      c,$c1                           ;[c3f9] IO address
 label_c3fb:
-    call    fdc_wait_rqm_rd                 ;[c3fb]
+    call    fdc_wait_rqm_rd                 ;[c3fb] wait until FDC is ready to send data
     ini                                     ;[c3fe] read from IO in *hl, hl++, b--
     jr      nz,label_c3fb                   ;[c400] end if b = 0
     ret                                     ;[c402]
 
     ; SUBROUTINE C403 ; wait for ioaddr(0xc0) to become "0b10xxxxxx"
-    ; This routine seems to be related to the FDC
-    ; Read main status register $c0 and wait for RQM = 1 and DIO = 0
+    ; FDC utility function: read main status register and wait for RQM = 1 and DIO = 0.
     ; RQM = request from master, RQM = 1 means FDC is ready for communication with the CPU
-    ; DIO = data input/outpu, DIO = 0 means transfer from CPU to FDC
+    ; DIO = data input/output, DIO = 0 means transfer from CPU to FDC
 fdc_wait_rqm_wr:
     in      a,($c0)                         ;[c403]
     rlca                                    ;[c405]
@@ -725,10 +727,9 @@ fdc_wait_rqm_wr:
     ret                                     ;[c40b]
 
     ; SUBROUTINE C40C ; wait for ioaddr(0xc0) to become "0b11xxxxxx"
-    ; This routine seems to be related to the FDC
-    ; Read main status register $c0 and wait for RQM = 1 and DIO = 1
+    ; FDC utility function: read main status register and wait for RQM = 1 and DIO = 1
     ; RQM = request from master, RQM = 1 means FDC is ready for communication with the CPU
-    ; DIO = data input/outpu, DIO = 1 means transfer from FDC to CPU
+    ; DIO = data input/output, DIO = 1 means transfer from FDC to CPU
 fdc_wait_rqm_rd:
     in      a,($c0)                         ;[c40c]
     rlca                                    ;[c40e]
@@ -738,15 +739,17 @@ fdc_wait_rqm_rd:
     ret                                     ;[c414]
 
     ; SUBROUTINE C415
-    ; Sends the command in c register to the FDC
+    ; FDC utility function: send a command byte to the FDC
+    ; Arguments:
+    ; - c: the command byte
 fdc_send_cmd:
-    call    fdc_wait_rqm_wr                 ;[c415]
+    call    fdc_wait_rqm_wr                 ;[c415] wait until FDC is ready to receive data
     ld      a,c                             ;[c418]
-    out     ($c1),a                         ;[c419]
+    out     ($c1),a                         ;[c419] actually send the comamnd
     ret                                     ;[c41b]
 
     ; SUBROUTINE C41C ; while( ioaddr(0xc0).4 == 1 ), wait
-    ; This subroutine seems to be related to FDC.
+    ; FDC utility function: wait until the FDC is no more busy.
     ; $C0 may be the main status register, where bit 4 is the CB (active high busy) flag.
 fdc_wait_busy:
     in      a,($c0)                         ;[c41c]
@@ -754,33 +757,42 @@ fdc_wait_busy:
     jr      nz,fdc_wait_busy                ;[c420]
     ret                                     ;[c422]
 
-fdc_baz_c423:
+    ; FDC utility routine: IDEA reset head position at least one time per drive since the computer was turned on
+    ; Arguments:
+    ; - c: drive number from rwfs routine
+fdc_initialize_drive_c423:
     ld      b,$01                           ;[c423]
     ld      a,c                             ;[c425]
-    and     $03                             ;[c426]
+    and     $03                             ;[c426] mask drive number only
     or      a                               ;[c428]
-    jr      z,label_c430                    ;[c429]
+    jr      z,label_c430                    ;[c429] if drive is != 0 (not drive A)...
 label_c42b:
-    rlc     b                               ;[c42b]
-    dec     a                               ;[c42d]
+    rlc     b                               ;[c42b] at the end of the cycle...
+    dec     a                               ;[c42d] ... b = 1 << (drive number)
     jr      nz,label_c42b                   ;[c42e]
 label_c430:
-    ld      a,($ffc7)                       ;[c430]
+    ld      a,($ffc7)                       ;[c430] idea: *ffc7 = mask of the accessed drives
     ld      c,a                             ;[c433]
     and     b                               ;[c434]
-    ret     nz                              ;[c435]
+    ret     nz                              ;[c435] return if rwfs is trying to access an already "initialized" drive
     ld      a,c                             ;[c436]
-    or      b                               ;[c437]
-    ld      ($ffc7),a                       ;[c438]
-    call    fdc_track0_c391                 ;[c43b]
+    or      b                               ;[c437] else, mark this drive as initialized...
+    ld      ($ffc7),a                       ;[c438] ...store this information in ram...
+    call    fdc_track0_c391                 ;[c43b] ...and perform initialization (aka moving head to track 0)
     ret                                     ;[c43e]
 
     ; SUBROUTINE C43F
-    ; FDC initialization
+    ; FDC initialization.
+    ; Configure the FDC IC with:
+    ; - SRT = 6 (Step Rate Time = 6ms)
+    ; - HUT = F (Head Unload Time = 240ms)
+    ; - HLT = A (Head Load Time = 22ms)
+    ; - ND = 1 (DMA mode disabled)
+fdc_init:
     push    bc                              ;[c43f]
     push    hl                              ;[c440]
     ld      hl,fdc_cfg_base                 ;[c441] prepare HL to address FDC configuration table
-    call    fdc_wait_busy                   ;[c444] while( ioaddr(0xc0).4 == 1 ), wait
+    call    fdc_wait_busy                   ;[c444]
     ld      c,$03                           ;[c447] send "specify" command
     call    fdc_send_cmd                    ;[c449]
     ld      c,(hl)                          ;[c44c] load first "specify" argument from table
@@ -789,15 +801,15 @@ label_c430:
     ld      c,(hl)                          ;[c451] load second "specify" argument from table
     call    fdc_send_cmd                    ;[c452] send HLT | ND
     xor     a                               ;[c455]
-    ld      ($ffc7),a                       ;[c456]
+    ld      ($ffc7),a                       ;[c456] *$ffc7 = 0
     pop     hl                              ;[c459]
     pop     bc                              ;[c45a]
     ret                                     ;[c45b]
 
     ; STATIC DATA for C43F
 fdc_cfg_base:
-    BYTE $6f                                ;[c45c]
-    BYTE $1b                                ;[c45d] DMA mode is disabled
+    BYTE $6f                                ;[c45c] SRT << 4 | HUT
+    BYTE $1b                                ;[c45d] HLT << 1 | ND
 
     ; SUBROUTINE C45E
 bios_putchar_c45e:
