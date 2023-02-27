@@ -1124,9 +1124,10 @@ label_c6e3:
     djnz    label_c6e3                      ;[c6e5]
     ret                                     ;[c6e7]
 
-    ld      ($ffd4),ix                      ;[c6e8] dd 22 d4 ff
-    ld      ($ffd6),iy                      ;[c6ec] fd 22 d6 ff
-    ret                                     ;[c6f0] c9
+    ; SUBROUTINE C6E8; save ix and iy
+    ld      ($ffd4),ix                      ;[c6e8]
+    ld      ($ffd6),iy                      ;[c6ec]
+    ret                                     ;[c6f0]
 
     push    af                              ;[c6f1] f5
     push    bc                              ;[c6f2] c5
@@ -2326,7 +2327,7 @@ label_cdb5:
     pop     hl                              ;[cde0] e1
     ret                                     ;[cde1] c9
 
-    call    $c69a                           ;[cde2] cd 9a c6
+    call    $c69a                           ;[cde2] load ix and iy
     call    $c6f1                           ;[cde5] cd f1 c6
     call    $c715                           ;[cde8] cd 15 c7
     ld      (hl),d                          ;[cdeb] 72
@@ -2335,7 +2336,7 @@ label_cdb5:
     call    $c79e                           ;[cdf0] cd 9e c7
     ret                                     ;[cdf3] c9
 
-    call    $c69a                           ;[cdf4] cd 9a c6
+    call    $c69a                           ;[cdf4] load ix and iy
     call    $c6f1                           ;[cdf7] cd f1 c6
     call    $c715                           ;[cdfa] cd 15 c7
     ld      d,(hl)                          ;[cdfd] 56
