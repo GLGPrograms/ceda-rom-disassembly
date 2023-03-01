@@ -61,7 +61,7 @@ label_c050:
     bit     0,a                             ;[c052]
     jr      z,label_c050                    ;[c054]
     in      a,($b2)                         ;[c056] read A from keyboard
-    out     ($da),a                         ;[c058]
+    out     ($da),a                         ;[c058] sound speaker beep
     ld      c,$56                           ;[c05a] hardcoded 'V' for splash screen
     call    $c45e                           ;[c05c] putchar()
     ld      hl,$cffc                        ;[c05f] "Splash screen" string pointer
@@ -109,7 +109,7 @@ bios_bootkey:
 bios_bootdisk:
     ld      a,$06                           ;[c09e] load A with $06
     out     ($b2),a                         ;[c0a0] send to keyboard
-    out     ($da),a                         ;[c0a2]
+    out     ($da),a                         ;[c0a2] sound speaker beep
     jp      $0080                           ;[c0a4] execute fresh code from ram
 
     ; SUBROUTINE C0A7: kbd_getchar()
@@ -1049,7 +1049,7 @@ label_c5ee:
     call    $c764                           ;[c5ee]
     jp      label_c6a3                      ;[c5f1]
     xor     a                               ;[c5f4]
-    out     ($da),a                         ;[c5f5]
+    out     ($da),a                         ;[c5f5] sound speaker beep
     ret                                     ;[c5f7]
 
     ; SUBROUTINE 0xC5F8
