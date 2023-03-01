@@ -29,9 +29,9 @@ label_c027:
     ; main entrypoint, after reset
 
     ; setup uPD8255 (GPIO IC)
-    ; - set PORTA as output
-    ; - set PORTB as output
-    ; - set PORTC as input (both high and low nibble)
+    ; - set PORTA as output (not connected ?)
+    ; - set PORTB as output (bank switching ?)
+    ; - set PORTC as input (both high and low nibble) (bit 1 = used by something unknown, bit 2 = floppy related)
     ; - set all ports to Mode 0 (latched outputs, not-latched inputs)
     ld      a,$89                           ;[c030] load configuration in A
     out     ($83),a                         ;[c032] write configuration
