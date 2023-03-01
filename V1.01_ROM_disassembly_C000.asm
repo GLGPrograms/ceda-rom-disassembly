@@ -27,11 +27,19 @@ label_c027:
     jr      label_c040                      ;[c02e]
 
     ; main entrypoint, after reset
-    ld      a,$89                           ;[c030] ???
-    out     ($83),a                         ;[c032] ???
+
+    ; setup uPD8255 (GPIO IC)
+    ; - set PORTA as output
+    ; - set PORTB as output
+    ; - set PORTC as input (both high and low nibble)
+    ; - set all ports to Mode 0 (latched outputs, not-latched inputs)
+    ld      a,$89                           ;[c030] load configuration in A
+    out     ($83),a                         ;[c032] write configuration
+
     di                                      ;[c034] disable interrupts
-    ld      a,$10                           ;[c035] ???
-    out     ($81),a                         ;[c037] ???
+
+    ld      a,$10                           ;[c035]
+    out     ($81),a                         ;[c037] PORTB = 0x10 (bank 4 in)
 
     ; delay, measured oscilloscope 208 ms
     ld      h,$7d                           ;[c039] hl = $7d
@@ -303,12 +311,12 @@ sio_chB_cfg_base:
     ; - hl: src
     ; - de: dst
     ; - bc: size
-    in      a,($81)                         ;[c165]/[0010] set bit 0 in $81
+    in      a,($81)                         ;[c165]/[0010]
     set     0,a                             ;[c167]/[0012]
-    out     ($81),a                         ;[c169]/[0014]
-    ldir                                    ;[c16b]/[0016] do the memcpy
-    res     0,a                             ;[c16d]/[0018] reset bit 0 in $81
-    out     ($81),a                         ;[c16f]/[001a]
+    out     ($81),a                         ;[c169]/[0014] PORTB |= 0x01 (bank 0 in)
+    ldir                                    ;[c16b]/[0016] perform the memcpy
+    res     0,a                             ;[c16d]/[0018]
+    out     ($81),a                         ;[c16f]/[001a] PORTB &= ~0x01 (bank 0 out)
     out     ($de),a                         ;[c171]/[001c] and copy same value in $de
     ret                                     ;[c173]/[001e]
 
@@ -420,7 +428,7 @@ label_c208:
     ld      hl,($ffbd)                      ;[c213] load base address of writing buffer
     ; Buffer writing loop
 label_c216:
-    in      a,($82)                         ;[c216]
+    in      a,($82)                         ;[c216] read PORTC
     bit     2,a                             ;[c218]
     jr      z,label_c216                    ;[c21a]
     in      a,($c0)                         ;[c21c] read FDC main status register
@@ -430,6 +438,7 @@ label_c216:
     jr      nz,label_c216                   ;[c224]
     dec     d                               ;[c226] bytes per sector is usually 512, must use a double byte counter
     jr      nz,label_c216                   ;[c227] write ends when d = 0 and b = 0
+
 label_c229:
     out     ($dc),a                         ;[c229]
     ei                                      ;[c22b] enable interrupts again
@@ -472,7 +481,7 @@ label_c25e:
     ld      b,e                             ;[c268] load number of bytes to write (LSB)
     ld      hl,($ffbd)                      ;[c269] load base address of reading buffer
 label_c26c:
-    in      a,($82)                         ;[c26c]
+    in      a,($82)                         ;[c26c] read PORTC
     bit     2,a                             ;[c26e]
     jr      z,label_c26c                    ;[c270]
     in      a,($c0)                         ;[c272] read FDC main status register
@@ -482,6 +491,7 @@ label_c26c:
     jr      nz,label_c26c                   ;[c27a]
     dec     d                               ;[c27c] bytes per sector is usually 512, must use a double byte counter
     jr      nz,label_c26c                   ;[c27d] read ends when d = 0 and b = 0
+
 label_c27f:
     out     ($dc),a                         ;[c27f]
     ei                                      ;[c281] enable interrupts again
@@ -590,7 +600,7 @@ label_c316:
     ld      c,$c1                           ;[c325]
     ld      hl,($ffbd)                      ;[c327]
 label_c32a:
-    in      a,($82)                         ;[c32a]
+    in      a,($82)                         ;[c32a] read PORTC
     bit     2,a                             ;[c32c]
     jr      z,label_c32a                    ;[c32e]
     in      a,($c0)                         ;[c330] read main status register
@@ -685,7 +695,7 @@ label_c3d0:
 
     ; FDC utility function: send "Sense Interrupt Status" command and read the two bytes (STO, PCN)
 fdc_sis_c3d2:
-    in      a,($82)                         ;[c3d2]
+    in      a,($82)                         ;[c3d2] read PORTC
     bit     2,a                             ;[c3d4]
     jp      z,fdc_sis_c3d2                  ;[c3d6]
     call    fdc_wait_busy                   ;[c3d9]
@@ -1317,10 +1327,10 @@ label_c730:
 
     in      a,($a0)                         ;[c75b] db a0
 label_c75d:
-    in      a,($82)                         ;[c75d] db 82
-    bit     1,a                             ;[c75f] cb 4f
-    jr      z,label_c75d                    ;[c761] 28 fa
-    ret                                     ;[c763] c9
+    in      a,($82)                         ;[c75d] read PORTC
+    bit     1,a                             ;[c75f]
+    jr      z,label_c75d                    ;[c761]
+    ret                                     ;[c763]
 
     ; SUBROUTINE C764; CRTC TODO (ix: ...)
     ld      bc,$0780                        ;[c764] 24*80 = "1920"
@@ -1332,9 +1342,9 @@ label_c770:
     ld      (hl),d                          ;[c770] write $20 in video memory: " "
     in      a,($81)                         ;[c771] set MSB in $81
     set     7,a                             ;[c773]
-    out     ($81),a                         ;[c775]
+    out     ($81),a                         ;[c775] PORTB |= 0x80 (bank 7 in)
     ld      (hl),e                          ;[c777] write 0 in bank switched video memory (?)
-    res     7,a                             ;[c778] reset MSB in $81
+    res     7,a                             ;[c778] PORTB &= ~0x80 (bank 7 out)
     out     ($81),a                         ;[c77a]
     inc     hl                              ;[c77c] move to next video memory address
     bit     3,h                             ;[c77d] ???
@@ -1351,19 +1361,21 @@ label_c770:
     ld      ($ffcb),a                       ;[c791] $ffcb <- 0
     ret                                     ;[c794]
 
-    push    af                              ;[c795] f5
-    in      a,($81)                         ;[c796] db 81
-    set     7,a                             ;[c798] cb ff
-    out     ($81),a                         ;[c79a] d3 81
-    pop     af                              ;[c79c] f1
-    ret                                     ;[c79d] c9
+    ; SUBROUTINE C795: enable memory Bank 7
+    push    af                              ;[c795]
+    in      a,($81)                         ;[c796]
+    set     7,a                             ;[c798]
+    out     ($81),a                         ;[c79a] PORTB |= 0x80 (bank 7 in)
+    pop     af                              ;[c79c]
+    ret                                     ;[c79d]
 
-    push    af                              ;[c79e] f5
-    in      a,($81)                         ;[c79f] db 81
-    res     7,a                             ;[c7a1] cb bf
-    out     ($81),a                         ;[c7a3] d3 81
-    pop     af                              ;[c7a5] f1
-    ret                                     ;[c7a6] c9
+    ; SUBROUTINE C79E: disable memory Bank 7
+    push    af                              ;[c79e]
+    in      a,($81)                         ;[c79f]
+    res     7,a                             ;[c7a1]
+    out     ($81),a                         ;[c7a3] PORTB &= ~0x80 (bank 7 out)
+    pop     af                              ;[c7a5]
+    ret                                     ;[c7a6]
 
     push    de                              ;[c7a7] d5
     push    bc                              ;[c7a8] c5
