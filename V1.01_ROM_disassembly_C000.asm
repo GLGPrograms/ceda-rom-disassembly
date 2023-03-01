@@ -91,7 +91,7 @@ bios_bootkey:
     ld      de,$0000                        ;[c088] d = track = 0; e = sector = 0
     ld      bc,$4000                        ;[c08b] b = cmd = read ($40); c = drive = 0
     ld      hl,$0080                        ;[c08e] load in $0080
-    ld      a,$01                           ;[c091] formatting mode, seems to be 180 bytes per sector
+    ld      a,$01                           ;[c091] formatting mode, seems to be 384 bytes per sector
     call    fdc_rwfs_c19d                   ;[c093] invoke reading
     cp      $ff                             ;[c096] check for error...
     jr      nz,bios_bootdisk                ;[c098] ...if ok, go on with loading
@@ -349,7 +349,7 @@ label_c19b:
     ; - b: operation command, see switch in this routine
     ; - c: drive number (0-3) + HD flag
     ; - d: track number
-    ; - e: head number
+    ; - e: sector number
     ; - hl: read/write buffer address
 fdc_rwfs_c19d:
     push    bc                              ;[c19d]
@@ -359,11 +359,11 @@ fdc_rwfs_c19d:
     ld      a,$0a                           ;[c1a3]
     ld      ($ffbf),a                       ;[c1a5] value used in error checking routines
     ld      ($ffb9),bc                      ;[c1a8] *$ffb9 = drive no. + HD flag, *$ffba = operation command
-    ld      ($ffbb),de                      ;[c1ac] *$ffbb = head index (0/1), *$ffbc = track number
+    ld      ($ffbb),de                      ;[c1ac] *$ffbb = sector number, *$ffbc = track number
     ld      ($ffbd),hl                      ;[c1b0] base address for read/write buffer
     call    fdc_initialize_drive_c423       ;[c1b3] move head to track 0 if never done before on current drive
     ld      a,($ffba)                       ;[c1b6] load command byte
-    and     $f0                             ;[c1b9]
+    and     $f0                             ;[c1b9] take only the most significant nibble
     jp      z,fdc_sw_track0                 ;[c1bb] case $00: move to track 0 (home)
     cp      $40                             ;[c1be]
     jp      z,fdc_sw_read_data              ;[c1c0] case $40: read sector in hl buffer
@@ -372,9 +372,9 @@ fdc_rwfs_c19d:
     cp      $20                             ;[c1c8]
     jp      z,fdc_sw_seek                   ;[c1ca] case $20: move head to desired track
     cp      $f0                             ;[c1cd]
-    jp      z,fdc_sw_format                 ;[c1cf] case $20: seek to desired track
+    jp      z,fdc_sw_format                 ;[c1cf] case $f0: seek to desired track
     ld      a,$ff                           ;[c1d2]
-    jp      fdc_sw_default                  ;[c1d4] default: return
+    jp      fdc_sw_default                  ;[c1d4] default: return -1
 fdc_sw_write_data:
     call    fdc_write_data_c1f4             ;[c1d7]
     jr      fdc_sw_default                  ;[c1da]
