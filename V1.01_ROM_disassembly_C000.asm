@@ -932,7 +932,7 @@ label_c4fb:
     call    $c620                           ;[c4fb]
     jp      label_c6a3                      ;[c4fe] putchar epilogue: save_index_restore_registers_and_ret()
 
-    ; SUBROUTINE 0xC501; called by c4e0 if posy reached last row
+    ; SUBROUTINE C501; called by c4e0 if posy reached last row
 label_c501:
     ld      a,($ffc9)                       ;[c501]
     or      a                               ;[c504]
@@ -1497,37 +1497,38 @@ label_c7f6:
     pop     de                              ;[c803] d1
     ret                                     ;[c804] c9
 
-    ld      a,e                             ;[c805] 7b
-    sub     c                               ;[c806] 91
-    inc     a                               ;[c807] 3c
-    ld      e,a                             ;[c808] 5f
-    ld      a,d                             ;[c809] 7a
-    sub     b                               ;[c80a] 90
-    inc     a                               ;[c80b] 3c
-    ld      d,a                             ;[c80c] 57
+    ; SUBROUTINE C805:
+    ld      a,e                             ;[c805]
+    sub     c                               ;[c806]
+    inc     a                               ;[c807]
+    ld      e,a                             ;[c808] E = E - C + 1
+    ld      a,d                             ;[c809]
+    sub     b                               ;[c80a]
+    inc     a                               ;[c80b]
+    ld      d,a                             ;[c80c] D = D - B + 1
 label_c80d:
-    call    $c6f1                           ;[c80d] cd f1 c6
+    call    $c6f1                           ;[c80d] display_add_row_column()
 label_c810:
-    call    $c715                           ;[c810] cd 15 c7
-    ld      (hl),$20                        ;[c813] 36 20
-    call    $c795                           ;[c815] cd 95 c7
-    ld      (hl),$00                        ;[c818] 36 00
-    call    $c79e                           ;[c81a] cd 9e c7
-    inc     hl                              ;[c81d] 23
-    dec     e                               ;[c81e] 1d
-    jr      nz,label_c810                   ;[c81f] 20 ef
-    inc     b                               ;[c821] 04
-    ld      a,($ffd0)                       ;[c822] 3a d0 ff
-    ld      c,a                             ;[c825] 4f
-    ld      a,($ffcf)                       ;[c826] 3a cf ff
-    sub     c                               ;[c829] 91
-    inc     a                               ;[c82a] 3c
-    ld      e,a                             ;[c82b] 5f
-    dec     d                               ;[c82c] 15
-    jr      nz,label_c80d                   ;[c82d] 20 de
-    ret                                     ;[c82f] c9
+    call    $c715                           ;[c810] display_cursor_to_video_mem_ptr()
+    ld      (hl),$20                        ;[c813] write ' ' directly in video mem
+    call    $c795                           ;[c815] bank7_in()
+    ld      (hl),$00                        ;[c818] write 0x00 in shadow video mem
+    call    $c79e                           ;[c81a] bank7_out()
+    inc     hl                              ;[c81d] increment video mem pointer
+    dec     e                               ;[c81e]
+    jr      nz,label_c810                   ;[c81f]
+    inc     b                               ;[c821]
+    ld      a,($ffd0)                       ;[c822]
+    ld      c,a                             ;[c825]
+    ld      a,($ffcf)                       ;[c826]
+    sub     c                               ;[c829]
+    inc     a                               ;[c82a]
+    ld      e,a                             ;[c82b]
+    dec     d                               ;[c82c]
+    jr      nz,label_c80d                   ;[c82d]
+    ret                                     ;[c82f]
 
-    ld      a,($ffcd)                       ;[c830] 3a cd ff
+    ld      a,($ffcd)                       ;[c830] read "number of rows" of display
     ld      b,a                             ;[c833] 47
     ld      a,($ffce)                       ;[c834] read "current row" (?)
     cp      b                               ;[c837]
@@ -1700,19 +1701,21 @@ label_c8ea:
     ld      ($ffd1),a                       ;[c8fd] 32 d1 ff
     ret                                     ;[c900] c9
 
-    ld      a,($ffd9)                       ;[c901] 3a d9 ff
-    ld      b,a                             ;[c904] 47
-    ld      d,$00                           ;[c905] 16 00
-    ld      e,a                             ;[c907] 5f
-    ld      hl,$ffd9                        ;[c908] 21 d9 ff
-    add     hl,de                           ;[c90b] 19
-    ld      a,c                             ;[c90c] 79
-    sub     $20                             ;[c90d] d6 20
-    ld      (hl),a                          ;[c90f] 77
-    ld      a,b                             ;[c910] 78
-    inc     a                               ;[c911] 3c
-    ld      ($ffd9),a                       ;[c912] 32 d9 ff
-    ret                                     ;[c915] c9
+    ; SUBROUTINE C901
+    ; Read a value and do things with it :TM:
+    ld      a,($ffd9)                       ;[c901]
+    ld      b,a                             ;[c904]
+    ld      d,$00                           ;[c905]
+    ld      e,a                             ;[c907] DE = A
+    ld      hl,$ffd9                        ;[c908]
+    add     hl,de                           ;[c90b] HL += A
+    ld      a,c                             ;[c90c]
+    sub     $20                             ;[c90d] C -= 32
+    ld      (hl),a                          ;[c90f] store A in (HL)
+    ld      a,b                             ;[c910]
+    inc     a                               ;[c911]
+    ld      ($ffd9),a                       ;[c912] store A
+    ret                                     ;[c915]
 
     ld      a,b                             ;[c916] 78
     out     ($a0),a                         ;[c917] d3 a0
@@ -2332,8 +2335,8 @@ label_ccbd:
     ld      ($ffce),a                       ;[ccc4] 32 ce ff
     ld      a,($ffc9)                       ;[ccc7] 3a c9 ff
     ld      c,a                             ;[ccca] 4f
-    ld      a,$01                           ;[cccb] 3e 01
-    ld      ($ffc9),a                       ;[cccd] 32 c9 ff
+    ld      a,$01                           ;[cccb]
+    ld      ($ffc9),a                       ;[cccd] var$ffc9 = 1
     push    bc                              ;[ccd0] c5
     call    $c62e                           ;[ccd1] cd 2e c6
     pop     bc                              ;[ccd4] c1
