@@ -915,7 +915,7 @@ label_c4be:
 label_c4e0:
     ld      a,($ffcb)                       ;[c4e0] load current cursor posy?
     ld      b,a                             ;[c4e3]
-    ld      a,($ffcd)                       ;[c4e4] load "max rows height - 1"
+    ld      a,($ffcd)                       ;[c4e4] read "number of rows" of display
     cp      b                               ;[c4e7]
     jr      z,label_c501                    ;[c4e8] jump if posy reached last row
     inc     b                               ;[c4ea] increment cursor posy?
@@ -942,7 +942,7 @@ label_c501:
     jp      label_c6a3                      ;[c50d] putchar epilogue: save_index_restore_registers_and_ret()
 
 label_c510:
-    ld      a,($ffcd)                       ;[c510]
+    ld      a,($ffcd)                       ;[c510] read "number of rows" of display
     ld      b,a                             ;[c513]
     ld      a,($ffd0)                       ;[c514]
     ld      c,a                             ;[c517]
@@ -960,7 +960,7 @@ label_c524:
 label_c532:
     ld      a,($ffcb)                       ;[c532]
     ld      b,a                             ;[c535]
-    ld      a,($ffcd)                       ;[c536]
+    ld      a,($ffcd)                       ;[c536] read "number of rows" of display
     cp      b                               ;[c539]
     jr      z,label_c54b                    ;[c53a]
     inc     b                               ;[c53c]
@@ -1003,7 +1003,7 @@ label_c57b:
     ld      c,a                             ;[c581]
     ld      a,($ffcb)                       ;[c582]
     ld      b,a                             ;[c585]
-    ld      a,($ffcd)                       ;[c586]
+    ld      a,($ffcd)                       ;[c586] read "number of rows" of display
     cp      b                               ;[c589]
     jr      z,label_c594                    ;[c58a]
     inc     b                               ;[c58c]
@@ -1130,7 +1130,7 @@ label_c647:
     ld      b,a                             ;[c64e] 47
     ld      a,($ffce)                       ;[c64f] 3a ce ff
     ld      d,a                             ;[c652] 57
-    ld      a,($ffcd)                       ;[c653] 3a cd ff
+    ld      a,($ffcd)                       ;[c653] read "number of rows" of display
     sub     d                               ;[c656] 92
     jr      z,label_c664                    ;[c657] 28 0b
     ld      d,a                             ;[c659] 57
@@ -1141,7 +1141,7 @@ label_c65a:
     dec     d                               ;[c661] 15
     jr      nz,label_c65a                   ;[c662] 20 f6
 label_c664:
-    ld      a,($ffcd)                       ;[c664] 3a cd ff
+    ld      a,($ffcd)                       ;[c664] read "number of rows" of display
     ld      d,a                             ;[c667] 57
     ld      a,($ffcf)                       ;[c668] 3a cf ff
     ld      e,a                             ;[c66b] 5f
@@ -1261,7 +1261,7 @@ display_add_row_column:
     ; prepare add-and-shift multiplication
     ld      de,$0050                        ;[c6f7] DE = 80 (display columns)
     ld      a,b                             ;[c6fa] A = B
-                                            ;       Maximum number of row is 25, which stays on 5 bits,
+                                            ;       Maximum number of row is 24, which stays on 5 bits,
                                             ;       then do this add-and-shift multiplication for 5 times max
     ld      b,$05                           ;[c6fb] B = 5
 
@@ -1521,9 +1521,9 @@ label_c810:
 
     ld      a,($ffcd)                       ;[c830] 3a cd ff
     ld      b,a                             ;[c833] 47
-    ld      a,($ffce)                       ;[c834] 3a ce ff
-    cp      b                               ;[c837] b8
-    jr      z,label_c845                    ;[c838] 28 0b
+    ld      a,($ffce)                       ;[c834] read "current row" (?)
+    cp      b                               ;[c837]
+    jr      z,label_c845                    ;[c838] if (current_row == number_of_rows), jump
     ld      d,a                             ;[c83a] 57
     ld      a,b                             ;[c83b] 78
     sub     d                               ;[c83c] 92
@@ -1534,9 +1534,9 @@ label_c83e:
     dec     d                               ;[c842] 15
     jr      nz,label_c83e                   ;[c843] 20 f9
 label_c845:
-    ld      a,($ffce)                       ;[c845] 3a ce ff
-    ld      b,a                             ;[c848] 47
-    ld      d,a                             ;[c849] 57
+    ld      a,($ffce)                       ;[c845] read "current row" (?)
+    ld      b,a                             ;[c848]
+    ld      d,a                             ;[c849]
     ld      a,($ffd0)                       ;[c84a] 3a d0 ff
     ld      c,a                             ;[c84d] 4f
     ld      a,($ffcf)                       ;[c84e] 3a cf ff
@@ -1633,20 +1633,25 @@ label_c895:
     xor     a                               ;[c8b4] clear a when return
     ret                                     ;[c8b5]
 
-    ; SUBROUTINE C8B6; configure CRTC vertical displayed characters
+    ; SUBROUTINE C8B6; crtc_set_vertical_lines()
+    ; Configure CRTC number of rows (24)
     ld      a,$06                           ;[c8b6]
     out     ($a0),a                         ;[c8b8] Select R6 CRTC register
     ld      a,$18                           ;[c8ba]
     out     ($a1),a                         ;[c8bc] Set 24 character lines
     ret                                     ;[c8be]
 
-    xor     a                               ;[c8bf] af
-    ld      ($ffce),a                       ;[c8c0] 32 ce ff
-    ld      ($ffd0),a                       ;[c8c3] 32 d0 ff
-    ld      ($ffc9),a                       ;[c8c6] 32 c9 ff
-    ld      a,$17                           ;[c8c9] 3e 17
-    ld      ($ffcd),a                       ;[c8cb] 32 cd ff
-    ret                                     ;[c8ce] c9
+    ; SUBROUTINE C8BF: display_init_variables()
+    ; Initialize some display-related stuff.
+    xor     a                               ;[c8bf] A = 0
+
+    ld      ($ffce),a                       ;[c8c0] var$ffce = 0
+    ld      ($ffd0),a                       ;[c8c3] var$ffd0 = 0
+    ld      ($ffc9),a                       ;[c8c6] var$ffc9 = 0
+
+    ld      a,$17                           ;[c8c9]
+    ld      ($ffcd),a                       ;[c8cb] "number of rows" of display = 24
+    ret                                     ;[c8ce]
 
     ld      b,$04                           ;[c8cf] 06 04
     call    $c75b                           ;[c8d1] cd 5b c7
@@ -2070,8 +2075,8 @@ label_cb27:
     ld      a,e                             ;[cb41] 7b
     cp      d                               ;[cb42] ba
     jr      c,label_cb68                    ;[cb43] 38 23
-    ld      hl,$ffcd                        ;[cb45] 21 cd ff
-    ld      (hl),c                          ;[cb48] 71
+    ld      hl,$ffcd                        ;[cb45]
+    ld      (hl),c                          ;[cb48] write "number of rows" of display
     inc     hl                              ;[cb49] 23
     ld      (hl),b                          ;[cb4a] 70
     inc     hl                              ;[cb4b] 23
@@ -2199,7 +2204,7 @@ label_cbf9:
     ld      b,a                             ;[cc0b] 47
     ld      a,($ffcf)                       ;[cc0c] 3a cf ff
     ld      e,a                             ;[cc0f] 5f
-    ld      a,($ffcd)                       ;[cc10] 3a cd ff
+    ld      a,($ffcd)                       ;[cc10] read "number of rows" of display
     ld      d,a                             ;[cc13] 57
     call    $c805                           ;[cc14] cd 05 c8
     call    $cc1b                           ;[cc17] cd 1b cc
@@ -2331,7 +2336,7 @@ label_ccdf:
     ld      b,a                             ;[cce2] 47
     ld      a,($ffca)                       ;[cce3] 3a ca ff
     ld      c,a                             ;[cce6] 4f
-    ld      a,($ffcd)                       ;[cce7] 3a cd ff
+    ld      a,($ffcd)                       ;[cce7] read "number of rows" of display
     ld      d,a                             ;[ccea] 57
     ld      a,($ffcf)                       ;[cceb] 3a cf ff
     ld      e,a                             ;[ccee] 5f
@@ -2344,7 +2349,7 @@ label_ccf4:
     ld      b,a                             ;[ccf7] 47
     ld      a,($ffcb)                       ;[ccf8] 3a cb ff
     ld      c,a                             ;[ccfb] 4f
-    ld      a,($ffcd)                       ;[ccfc] 3a cd ff
+    ld      a,($ffcd)                       ;[ccfc] read "number of rows" of display
     cp      c                               ;[ccff] b9
     jr      z,label_cd18                    ;[cd00] 28 16
     ld      a,c                             ;[cd02] 79
