@@ -850,9 +850,10 @@ bios_putchar_c45e:
     push    iy                              ;[c464]
     call    $c69a                           ;[c466] bios_load_ix_iy()
 
+    ; if escaping a char from previous call, then jump to second-stage escape handler
     ld      a,($ffd8)                       ;[c469]
-    or      a                               ;[c46c] if *$ffd8 != 0...
-    jp      nz,$c9e3                        ;[c46d] TODO
+    or      a                               ;[c46c]
+    jp      nz,$c9e3                        ;[c46d]
 
     ; check if should override character switch behaviour
     ld      a,($ffcc)                       ;[c470]
@@ -887,7 +888,7 @@ bios_putchar_c45e:
     jp      z,label_c6a3                    ;[c4b0]     save_index_restore_registers_and_ret()
     jp      label_c4be                      ;[c4b3] jump if any other not printable character
 
-    ; Handle ESC
+    ; Handle escape (first stage): remember that a character is being escaped, for next putchar()
 label_c4b6:
     ld      a,$01                           ;[c4b6]
     ld      ($ffd8),a                       ;[c4b8]
@@ -1854,112 +1855,104 @@ label_c984:
     xor     a                               ;[c9e1] af
     ret                                     ;[c9e2] c9
 
+    ; Handle second stage of escaping sequence
 label_c9e3:
-    call    $ca01                           ;[c9e3] cd 01 ca
-    cp      $01                             ;[c9e6] fe 01
-    jr      nz,label_c9eb                   ;[c9e8] 20 01
-    ld      a,c                             ;[c9ea] 79
+    call    $ca01                           ;[c9e3]
+    cp      $01                             ;[c9e6]
+    jr      nz,label_c9eb                   ;[c9e8]
+    ld      a,c                             ;[c9ea]
 label_c9eb:
-    ld      ($ffd8),a                       ;[c9eb] 32 d8 ff
-    cp      $60                             ;[c9ee] fe 60
-    jp      nc,$ca70                        ;[c9f0] d2 70 ca
-    sub     $31                             ;[c9f3] d6 31
-    jp      c,$ca70                         ;[c9f5] da 70 ca
-    call    $ca05                           ;[c9f8] cd 05 ca
-    or      a                               ;[c9fb] b7
-    jr      z,label_ca70                    ;[c9fc] 28 72
-    jp      $c6a3                           ;[c9fe] c3 a3 c6
+    ld      ($ffd8),a                       ;[c9eb]
+    cp      $60                             ;[c9ee]
+    jp      nc,$ca70                        ;[c9f0] jump if A >= $60
+    sub     $31                             ;[c9f3]
+    jp      c,$ca70                         ;[c9f5] jump if A < $31
+    call    $ca05                           ;[c9f8] call if $31 <= A < $60
+    or      a                               ;[c9fb]
+    jr      z,label_ca70                    ;[c9fc]
+    jp      $c6a3                           ;[c9fe] save_index_restore_registers_and_ret()
+
+    ; SUBROUTINE:
     ld      hl,($bffa)                      ;[ca01] 2a fa bf
     jp      (hl)                            ;[ca04] e9
-    add     a                               ;[ca05] 87
-    ld      hl,$ca12                        ;[ca06] 21 12 ca
-    ld      d,$00                           ;[ca09] 16 00
-    ld      e,a                             ;[ca0b] 5f
-    add     hl,de                           ;[ca0c] 19
-    ld      e,(hl)                          ;[ca0d] 5e
-    inc     hl                              ;[ca0e] 23
-    ld      d,(hl)                          ;[ca0f] 56
-    ex      de,hl                           ;[ca10] eb
-    jp      (hl)                            ;[ca11] e9
-    ld      b,d                             ;[ca12] 42
-    call    $cd46                           ;[ca13] cd 46 cd
-    ld      a,d                             ;[ca16] 7a
-    jp      z,$ca7a                         ;[ca17] ca 7a ca
-    ld      a,d                             ;[ca1a] 7a
-    jp      z,$ca7c                         ;[ca1b] ca 7c ca
-    cp      a                               ;[ca1e] bf
-    ret                                     ;[ca1f] c9
 
-    ld      a,a                             ;[ca20] 7f
-    call    z,$ca7a                         ;[ca21] cc 7a ca
-    call    nc,$f2ca                        ;[ca24] d4 ca f2
-    jp      z,$cb1c                         ;[ca27] ca 1c cb
-    ld      l,d                             ;[ca2a] 6a
-    res     3,a                             ;[ca2b] cb 9f
-    res     7,e                             ;[ca2d] cb bb
-    bit     7,h                             ;[ca2f] cb 7c
-    jp      z,$c875                         ;[ca31] ca 75 c8
-    xor     h                               ;[ca34] ac
-    ret     z                               ;[ca35] c8
-    ld      a,d                             ;[ca36] 7a
-    jp      z,$c942                         ;[ca37] ca 42 c9
-    ld      b,d                             ;[ca3a] 42
-    ret                                     ;[ca3b] c9
+    ; extract an address from the following address table, and jump there
+    ;   first compute index based on A
+    add     a                               ;[ca05]
+    ld      hl,$ca12                        ;[ca06]
+    ld      d,$00                           ;[ca09]
+    ld      e,a                             ;[ca0b]
+    add     hl,de                           ;[ca0c] HL = $CA12 + 2 * A
+    ;   read address
+    ld      e,(hl)                          ;[ca0d]
+    inc     hl                              ;[ca0e]
+    ld      d,(hl)                          ;[ca0f]
+    ex      de,hl                           ;[ca10]
+    ;   jump there
+    jp      (hl)                            ;[ca11]
 
-    ld      b,d                             ;[ca3c] 42
-    ret                                     ;[ca3d] c9
+    ; Second stage escape address table
+    WORD $cd42
+    WORD $cd46
+    WORD $ca7a
+    WORD $ca7a
+    WORD $ca7a
+    WORD $ca7c
+    WORD $c9bf
+    WORD $cc7f
+    WORD $ca7a
+    WORD $cad4
+    WORD $caf2
+    WORD $cb1c
+    WORD $cb6a
+    WORD $cb9f
+    WORD $cbbb
+    WORD $ca7c
+    WORD $c875
+    WORD $c8ac
+    WORD $ca7a
+    WORD $c942
+    WORD $c942
+    WORD $c942
+    WORD $c942
+    WORD $c995
+    WORD $c99c
+    WORD $c9a3
+    WORD $c9aa
+    WORD $c9b1
+    WORD $c9b8
+    WORD $cc45
+    WORD $ca7a
+    WORD $ccab
+    WORD $ccdf
+    WORD $ca7a
+    WORD $cbda
+    WORD $cc04
+    WORD $cc1b
+    WORD $cc33
+    WORD $c9bf
+    WORD $c9cb
+    WORD $c9d7
+    WORD $c9bf
+    WORD $cc7f
+    WORD $c8df
+    WORD $c8fc
+    WORD $cc95
+    WORD $cd27
 
-    ld      b,d                             ;[ca3e] 42
-    ret                                     ;[ca3f] c9
-
-    sub     l                               ;[ca40] 95
-    ret                                     ;[ca41] c9
-
-    sbc     h                               ;[ca42] 9c
-    ret                                     ;[ca43] c9
-
-    and     e                               ;[ca44] a3
-    ret                                     ;[ca45] c9
-
-    xor     d                               ;[ca46] aa
-    ret                                     ;[ca47] c9
-
-    or      c                               ;[ca48] b1
-    ret                                     ;[ca49] c9
-
-    cp      b                               ;[ca4a] b8
-    ret                                     ;[ca4b] c9
-
-    ld      b,l                             ;[ca4c] 45
-    call    z,$ca7a                         ;[ca4d] cc 7a ca
-    xor     e                               ;[ca50] ab
-    call    z,$ccdf                         ;[ca51] cc df cc
-    ld      a,d                             ;[ca54] 7a
-    jp      z,$cbda                         ;[ca55] ca da cb
-    inc     b                               ;[ca58] 04
-    call    z,$cc1b                         ;[ca59] cc 1b cc
-    inc     sp                              ;[ca5c] 33
-    call    z,$c9bf                         ;[ca5d] cc bf c9
-    set     1,c                             ;[ca60] cb c9
-    rst     $10                             ;[ca62] d7
-    ret                                     ;[ca63] c9
-
-    cp      a                               ;[ca64] bf
-    ret                                     ;[ca65] c9
-
-    ld      a,a                             ;[ca66] 7f
-    call    z,$c8df                         ;[ca67] cc df c8
-    call    m,$95c8                         ;[ca6a] fc c8 95
-    call    z,$cd27                         ;[ca6d] cc 27 cd
 label_ca70:
-    xor     a                               ;[ca70] af
-    ld      ($ffd8),a                       ;[ca71] 32 d8 ff
-    ld      ($ffd9),a                       ;[ca74] 32 d9 ff
-    jp      $c6a3                           ;[ca77] c3 a3 c6
-    xor     a                               ;[ca7a] af
-    ret                                     ;[ca7b] c9
+    xor     a                               ;[ca70]
+    ld      ($ffd8),a                       ;[ca71] set "no ongoing escaping"
+    ld      ($ffd9),a                       ;[ca74]
+    jp      $c6a3                           ;[ca77] save_index_restore_registers_and_ret()
 
-    call    $cdd7                           ;[ca7c] cd d7 cd
+    ; SUBMONSTER CA7A: return 0.
+    ; can be reached with a call and with a jmp
+    xor     a                               ;[ca7a]
+    ret                                     ;[ca7b] return 0
+
+    call    $cdd7                           ;[ca7c] increment_ffd9_if_zero() ; WARN: may not return here!
+
     cp      $01                             ;[ca7f] fe 01
     jr      nz,label_ca8c                   ;[ca81] 20 09
     ld      a,c                             ;[ca83] 79
@@ -2241,14 +2234,15 @@ label_cbf9:
     xor     a                               ;[cc31] af
     ret                                     ;[cc32] c9
 
-    call    $c764                           ;[cc33] cd 64 c7
-    ld      a,$01                           ;[cc36] 3e 01
-    ld      ($ffc8),a                       ;[cc38] 32 c8 ff
-    ld      a,$4f                           ;[cc3b] 3e 4f
-    ld      ($ffcf),a                       ;[cc3d] 32 cf ff
-    call    $c8bf                           ;[cc40] cd bf c8
-    xor     a                               ;[cc43] af
-    ret                                     ;[cc44] c9
+    ; SUBROUTINE CC33: Never called, at least from this ROM address.
+    call    $c764                           ;[cc33] display_clear()
+    ld      a,$01                           ;[cc36]
+    ld      ($ffc8),a                       ;[cc38] var$ffc8 = 1
+    ld      a,$4f                           ;[cc3b]
+    ld      ($ffcf),a                       ;[cc3d] var$ffcf = 79
+    call    $c8bf                           ;[cc40] display_init_variables()
+    xor     a                               ;[cc43]
+    ret                                     ;[cc44] return 0
 
     ld      b,$00                           ;[cc45] 06 00
 label_cc47:
