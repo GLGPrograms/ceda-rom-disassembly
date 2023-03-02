@@ -821,17 +821,17 @@ fdc_cfg_base:
     BYTE $6f                                ;[c45c] SRT << 4 | HUT
     BYTE $1b                                ;[c45d] HLT << 1 | ND
 
-    ; SUBROUTINE C45E
+    ; SUBROUTINE C45E: bios_putchar()
+    ; Input
+    ;   C: character to be printed
 bios_putchar_c45e:
-    ; arguments:
-    ; - c: character to be printed
     push    af                              ;[c45e] save all registers
     push    bc                              ;[c45f]
     push    de                              ;[c460]
     push    hl                              ;[c461]
     push    ix                              ;[c462]
     push    iy                              ;[c464]
-    call    $c69a                           ;[c466] load ix and iy (?? and cursor position)
+    call    $c69a                           ;[c466] bios_load_ix_iy()
 
     ld      a,($ffd8)                       ;[c469]
     or      a                               ;[c46c] if *$ffd8 != 0...
@@ -840,7 +840,7 @@ bios_putchar_c45e:
     ; check if should override character switch behaviour
     ld      a,($ffcc)                       ;[c470]
     cp      $ff                             ;[c473] if *$ffcc is == $ff...
-    jp      z,$c6a3                         ;[c475] treat c as NUL character
+    jp      z,$c6a3                         ;[c475]     save_index_restore_registers_and_ret()
     or      a                               ;[c478] if *$ffcc is != 0...
     jp      nz,label_c4be                   ;[c479] print c even if is not a printable char
 
