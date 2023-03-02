@@ -1022,9 +1022,12 @@ label_c59b:
     cp      c                               ;[c5a2]
     jr      z,label_c5b8                    ;[c5a3]
     dec     c                               ;[c5a5]
+
+    ; if (magenta:3 == 0), jump label_c5ae
     ld      a,($ffd1)                       ;[c5a6]
     bit     3,a                             ;[c5a9]
     jr      z,label_c5ae                    ;[c5ab]
+
     dec     c                               ;[c5ad]
 label_c5ae:
     ld      a,c                             ;[c5ae]
@@ -1035,9 +1038,12 @@ label_c5ae:
 label_c5b8:
     ld      a,($ffcf)                       ;[c5b8]
     ld      b,a                             ;[c5bb]
+
+    ; if (magenta:3 == 0), jump to label_c5c4
     ld      a,($ffd1)                       ;[c5bc]
     bit     3,a                             ;[c5bf]
     jr      z,label_c5c4                    ;[c5c1]
+
     dec     b                               ;[c5c3]
 label_c5c4:
     ld      a,b                             ;[c5c4]
@@ -1077,10 +1083,12 @@ label_c5ee:
     ld      a,($ffca)                       ;[c5f8] load cursor posx
     ld      c,a                             ;[c5fb]
     inc     c                               ;[c5fc] increment posx by one
-    ld      a,($ffd1)                       ;[c5fd]
+
+    ld      a,($ffd1)                       ;[c5fd] if (magenta:3) {
     bit     3,a                             ;[c600]
-    jr      z,label_c605                    ;[c602] if bit 3 of $ffd1 is set...
-    inc     c                               ;[c604] do another increment on posx
+    jr      z,label_c605                    ;[c602]
+    inc     c                               ;[c604]     increment C (posx)
+                                            ;       }
 label_c605:
     ld      a,($ffcf)                       ;[c605] load "maximum column width - 1" value
     cp      c                               ;[c608]
@@ -1206,7 +1214,7 @@ label_c6a3:
     inc     hl                              ;[c6bf]
     ld      (hl),$4f                        ;[c6c0] *$ffd0 = "79" (columns-1)
     inc     hl                              ;[c6c2]
-    ld      (hl),a                          ;[c6c3] *$ffd1 = 0
+    ld      (hl),a                          ;[c6c3] *$ffd1 = 0 (clear "magenta" bitmap)
     inc     hl                              ;[c6c4]
     ld      (hl),a                          ;[c6c5] *$ffd2 = 0
     inc     hl                              ;[c6c6]
@@ -1590,9 +1598,11 @@ crtc_cfg_base:
     BYTE $00                                ;[c874]
 
 
-    ld      a,($ffd1)                       ;[c875] 3a d1 ff
-    set     3,a                             ;[c878] cb df
-    ld      ($ffd1),a                       ;[c87a] 32 d1 ff
+    ; set magenta:3
+    ld      a,($ffd1)                       ;[c875]
+    set     3,a                             ;[c878]
+    ld      ($ffd1),a                       ;[c87a]
+
     ld      a,($ffca)                       ;[c87d] 3a ca ff
     ld      c,a                             ;[c880] 4f
     rra                                     ;[c881] 1f
@@ -2090,10 +2100,13 @@ label_cb27:
     ld      e,a                             ;[cb57] 5f
     ld      a,d                             ;[cb58] 7a
     add     e                               ;[cb59] 83
-    ld      hl,$ffd1                        ;[cb5a] 21 d1 ff
-    bit     3,(hl)                          ;[cb5d] cb 5e
-    jr      z,label_cb62                    ;[cb5f] 28 01
-    add     a                               ;[cb61] 87
+
+    ; if magenta:3 == 0, jump label_cb62
+    ld      hl,$ffd1                        ;[cb5a]
+    bit     3,(hl)                          ;[cb5d]
+    jr      z,label_cb62                    ;[cb5f]
+
+    add     a                               ;[cb61]
 label_cb62:
     ld      ($ffc8),a                       ;[cb62] 32 c8 ff
     call    $cc1b                           ;[cb65] cd 1b cc
@@ -2101,40 +2114,40 @@ label_cb68:
     xor     a                               ;[cb68] af
     ret                                     ;[cb69] c9
 
-    call    $cdd7                           ;[cb6a] cd d7 cd
-    cp      $02                             ;[cb6d] fe 02
-    jr      z,label_cb75                    ;[cb6f] 28 04
-    call    $c901                           ;[cb71] cd 01 c9
-    ret                                     ;[cb74] c9
+    call    $cdd7                           ;[cb6a] increment_ffd9_if_zero() ; WARN: may not return here!
+    cp      $02                             ;[cb6d]
+    jr      z,label_cb75                    ;[cb6f]
+    call    $c901                           ;[cb71]
+    ret                                     ;[cb74]
 
 label_cb75:
-    ld      a,c                             ;[cb75] 79
-    sub     $20                             ;[cb76] d6 20
-    ld      c,a                             ;[cb78] 4f
-    ld      a,$4f                           ;[cb79] 3e 4f
-    cp      c                               ;[cb7b] b9
-    jr      c,label_cb9d                    ;[cb7c] 38 1f
-    ld      a,($ffd1)                       ;[cb7e] 3a d1 ff
-    bit     3,a                             ;[cb81] cb 5f
-    jr      z,label_cb88                    ;[cb83] 28 03
-    ld      a,c                             ;[cb85] 79
-    add     a                               ;[cb86] 87
-    ld      c,a                             ;[cb87] 4f
+    ld      a,c                             ;[cb75]
+    sub     $20                             ;[cb76]
+    ld      c,a                             ;[cb78] C -= 32
+    ld      a,$4f                           ;[cb79] A = 79 (80 columns - 1)
+    cp      c                               ;[cb7b]
+    jr      c,label_cb9d                    ;[cb7c] if A >= C
+    ld      a,($ffd1)                       ;[cb7e]
+    bit     3,a                             ;[cb81]
+    jr      z,label_cb88                    ;[cb83]     if (magenta:3)
+    ld      a,c                             ;[cb85]
+    add     a                               ;[cb86]
+    ld      c,a                             ;[cb87]         C *= 2
 label_cb88:
-    ld      a,($ffda)                       ;[cb88] 3a da ff
-    cp      $19                             ;[cb8b] fe 19
-    jr      nc,label_cb9d                   ;[cb8d] 30 0e
-    ld      b,a                             ;[cb8f] 47
-    ld      ($ffcb),a                       ;[cb90] 32 cb ff
-    ld      a,c                             ;[cb93] 79
-    ld      ($ffca),a                       ;[cb94] 32 ca ff
-    call    $c6f1                           ;[cb97] cd f1 c6
-    call    $c71c                           ;[cb9a] cd 1c c7
+    ld      a,($ffda)                       ;[cb88]
+    cp      $19                             ;[cb8b]     compare var$FFDA with 25 (number of display rows + 1)
+    jr      nc,label_cb9d                   ;[cb8d]     if var$FFDA <= 25, then
+    ld      b,a                             ;[cb8f]         current_row = var$FFDA
+    ld      ($ffcb),a                       ;[cb90]         store current_row in var$FFCB
+    ld      a,c                             ;[cb93]
+    ld      ($ffca),a                       ;[cb94]         store current_column in var$FFCA
+    call    $c6f1                           ;[cb97]         display_add_row_column(current_row, current_column)
+    call    $c71c                           ;[cb9a]         crtc_update_cursor_position()
 label_cb9d:
-    xor     a                               ;[cb9d] af
-    ret                                     ;[cb9e] c9
+    xor     a                               ;[cb9d] A = 0 (return "ok")
+    ret                                     ;[cb9e]
 
-    call    $cdd7                           ;[cb9f] cd d7 cd
+    call    $cdd7                           ;[cb9f] increment_ffd9_if_zero() ; WARN: may not return here!
     ld      a,c                             ;[cba2] 79
     sub     $20                             ;[cba3] d6 20
     ld      c,a                             ;[cba5] 4f
