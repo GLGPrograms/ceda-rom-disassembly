@@ -1784,6 +1784,7 @@ label_c984:
     xor     a                               ;[c993] af
     ret                                     ;[c994] c9
 
+    ; MAYBE -- BEGIN OF SOME DATA
     ld      hl,$ffd1                        ;[c995] 21 d1 ff
     set     0,(hl)                          ;[c998] cb c6
     xor     a                               ;[c99a] af
@@ -1813,6 +1814,7 @@ label_c984:
     res     1,(hl)                          ;[c9bb] cb 8e
     xor     a                               ;[c9bd] af
     ret                                     ;[c9be] c9
+    ; MAYBE -- END OF SOME DATA
 
     ld      a,($ffd1)                       ;[c9bf] 3a d1 ff
     and     $8f                             ;[c9c2] e6 8f
