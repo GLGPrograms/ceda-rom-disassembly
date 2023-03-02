@@ -67,10 +67,10 @@ label_c050:
     ld      hl,$cffc                        ;[c05f] "Splash screen" string pointer
     ld      b,$04                           ;[c062]
 label_c064:
-    ld      c,(hl)                          ;[c064]
+    ld      c,(hl)                          ;[c064] for (b = 4; b > 0; --b) {
     inc     hl                              ;[c065]
-    call    $c45e                           ;[c066] putchar()
-    djnz    label_c064                      ;[c069]
+    call    $c45e                           ;[c066]     putchar()
+    djnz    label_c064                      ;[c069] } loop
 
     ; Boot procedure: execute a routine associated to a keypress
     ; - if BOOT, execute bios_bootkey
