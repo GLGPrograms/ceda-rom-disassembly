@@ -364,7 +364,7 @@ label_c19b:
 
     ; FDC Read Write Format Seek routine.
     ; Arguments:
-    ; - a: bytes per sector "shift factor", bps = 0x80 << a - found here: https://www.cpcwiki.eu/index.php/765_FDC
+    ; - a: bytes per sector "shift factor", bps = 0x80 << a
     ; - b: operation command, see switch in this routine
     ; - c: drive number (0-3) + HD flag
     ; - d: track number
@@ -524,13 +524,13 @@ label_c29e:
 
     ; TODO this is a FDC routine related to error checking after read/write
 fdc_err_check_c2a0:
-    ld      a,($ffc2)                       ;[c2a0] read 3rd status byte after cmd execution (ST2)
+    ld      a,($ffc2)                       ;[c2a0] read 2nd status register (ST1)
     bit     4,a                             ;[c2a3]
     jr      z,label_c2ab                    ;[c2a5]
     call    fdc_track0_c391                 ;[c2a7] reset head position if bit 4 is set
     ret                                     ;[c2aa]
 label_c2ab:
-    ld      a,($ffc1)                       ;[c2ab] read 2nd status byte after cmd execution (ST1)
+    ld      a,($ffc1)                       ;[c2ab] read 3rd status register (ST2)
     bit     0,a                             ;[c2ae]
     jr      z,label_c2b6                    ;[c2b0]
     call    fdc_track0_c391                 ;[c2b2] reset head position if bit 0 is set
@@ -675,9 +675,9 @@ fdc_track0_c391:
     ld      bc,($ffb9)                      ;[c399] Load drive number?
     res     2,c                             ;[c39d] For some reason, clear bit 2. Recalibrate argument must be 0b000000xx, where xx = drive number in [0,3]
     call    fdc_send_cmd                    ;[c39f] Send command to FDC
-    call    fdc_sis_c3d2                    ;[c3a2] Sends command Sense Interrupt Status and gets the two bytes answer (ST0 - PCN)
-    jr      z,fdc_track0_c391               ;[c3a5] Waits until byte ST0 = 0b01xxxxxx. Probably meaning that recalibration is completed?
-    xor     a                               ;[c3a7] Clear a
+    call    fdc_sis_c3d2                    ;[c3a2] send SIS to check if head movement was correctly completed
+    jr      z,fdc_track0_c391               ;[c3a5] check if return is "readfail" (Z = 0) then retry, else...
+    xor     a                               ;[c3a7] ... return 0
     ret                                     ;[c3a8]
 
     ; FDC: sends the seek command and move head upon desired track
@@ -696,32 +696,38 @@ fdc_seek_c3a9:
     call    fdc_send_cmd                    ;[c3be]
     ld      c,d                             ;[c3c1] 2nd arg: send NCN (new cylinder number) = desired track
     call    fdc_send_cmd                    ;[c3c2]
-    call    fdc_sis_c3d2                    ;[c3c5]
-    jr      nz,label_c3d0                   ;[c3c8] (i think) wait until completion. On failure:
+    call    fdc_sis_c3d2                    ;[c3c5] sends SIS to check if head movement was correctly completed
+    jr      nz,label_c3d0                   ;[c3c8] if fdc_sis returns "OK" (Z != 0), return, else...
     call    fdc_track0_c391                 ;[c3ca] ...move head to track 0...
     jp      fdc_seek_c3a9                   ;[c3cd] ...and try again
 label_c3d0:
     xor     a                               ;[c3d0] On success, a=0 and return
     ret                                     ;[c3d1]
 
-    ; FDC utility function: send "Sense Interrupt Status" command and read the two bytes (STO, PCN)
+    ; FDC utility function: send "Sense Interrupt Status" command and read the two bytes (ST0, PCN)
+    ; Return:
+    ; - Z flag from the comparison (ST0 & 0xC0) == 0x40.
+    ;   ST0[7:6] is Interrupt Code, and is:
+    ;     - 00 if previous operation was successful (OK);
+    ;     - 01 if previous operation was not successful (readfail);
+    ;     - other cases are treated as successful.
 fdc_sis_c3d2:
     in      a,($82)                         ;[c3d2] read PORTC
     bit     2,a                             ;[c3d4]
-    jp      z,fdc_sis_c3d2                  ;[c3d6]
+    jp      z,fdc_sis_c3d2                  ;[c3d6] busy wait until PORTC[2] != 0
     call    fdc_wait_busy                   ;[c3d9]
-    call    fdc_wait_rqm_wr                 ;[c3dc]
-    ld      a,$08                           ;[c3df]
+    call    fdc_wait_rqm_wr                 ;[c3dc] wait until FDC is ready for write request
+    ld      a,$08                           ;[c3df] send "Sense Interrupt Status" command
     out     ($c1),a                         ;[c3e1]
-    call    fdc_wait_rqm_rd                 ;[c3e3]
-    in      a,($c1)                         ;[c3e6]
+    call    fdc_wait_rqm_rd                 ;[c3e3] wait for data ready from FDC
+    in      a,($c1)                         ;[c3e6] read status byte (ST0)
     ld      b,a                             ;[c3e8]
     call    fdc_wait_rqm_rd                 ;[c3e9]
-    in      a,($c1)                         ;[c3ec]
-    ld      a,b                             ;[c3ee]
+    in      a,($c1)                         ;[c3ec] read present cylinder number (PCN), aka current track
+    ld      a,b                             ;[c3ee] discard PCN
     and     $c0                             ;[c3ef]
-    cp      $40                             ;[c3f1]
-    ret                                     ;[c3f3]
+    cp      $40                             ;[c3f1] perform (ST0 & 0xC0) == 0x40
+    ret                                     ;[c3f3] return is in Z flag
 
     ; FDC utility function: read response after read/write/format execution.
     ; A 7 byte response is given, read it all in $ffc0-$ffc6
