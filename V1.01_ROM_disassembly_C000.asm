@@ -444,19 +444,19 @@ label_c229:
     ei                                      ;[c22b] enable interrupts again
     call    fdc_rw_status_c3f4              ;[c22c] command response, put it in $ffc0-$ffc6
     ld      a,($ffc0)                       ;[c22f] fetch status (ST0)
-    and     $c0                             ;[c232]
-    cp      $40                             ;[c234] TODO check for error
-    jr      nz,label_c248                   ;[c236] TODO jump if ok or fail?
+    and     $c0                             ;[c232] mask Interrupt Code bits (as in fdc_sis routine)...
+    cp      $40                             ;[c234] 
+    jr      nz,label_c248                   ;[c236] ... and return if IC != 01 (!= "readfail")
     call    fdc_err_check_c2a0              ;[c238] after-write error checking (common with "read data")
-    ld      a,($ffbf)                       ;[c23b] TODO
-    dec     a                               ;[c23e] TODO may be an error retry counter
-    ld      ($ffbf),a                       ;[c23f] TODO
-    jp      nz,fdc_write_retry_c1f7         ;[c242] may be a write retry, after 256 iterations it gives up
+    ld      a,($ffbf)                       ;[c23b] keep a retry counter to avoid infinite loops
+    dec     a                               ;[c23e] decrement number of remaining retry
+    ld      ($ffbf),a                       ;[c23f]
+    jp      nz,fdc_write_retry_c1f7         ;[c242] after 256 retry give up and...
     ld      a,$ff                           ;[c245]
-    ret                                     ;[c247] return -1?
+    ret                                     ;[c247] ... return -1
 label_c248:
     xor     a                               ;[c248]
-    ret                                     ;[c249] return 0?
+    ret                                     ;[c249] return 0
 
     ; FDC read data routine
     ; Read data from desired track/sector to *$ffbd
@@ -497,35 +497,35 @@ label_c27f:
     ei                                      ;[c281] enable interrupts again
     call    fdc_rw_status_c3f4              ;[c282] command response, put it in $ffc0-$ffc6
     ld      a,($ffc0)                       ;[c285] fetch status (ST0)
-    and     $c0                             ;[c288]
-    cp      $40                             ;[c28a] TODO check for error
-    jr      nz,label_c29e                   ;[c28c] TODO jump if ok or fail?
-    call    fdc_err_check_c2a0              ;[c28e] after-read error checking
-    ld      a,($ffbf)                       ;[c291] TODO
-    dec     a                               ;[c294] TODO may be an error retry counter
-    ld      ($ffbf),a                       ;[c295] TODO
-    jp      nz,fdc_read_retry_c24d          ;[c298] may be a write retry, after 256 iterations it gives up
+    and     $c0                             ;[c288] mask Interrupt Code bits (as in fdc_sis routine)...
+    cp      $40                             ;[c28a]
+    jr      nz,label_c29e                   ;[c28c]... and return if IC != 01 (!= "readfail")
+    call    fdc_err_check_c2a0              ;[c28e] after-write error checking (common with "read data")
+    ld      a,($ffbf)                       ;[c291] keep a retry counter to avoid infinite loops
+    dec     a                               ;[c294] decrement number of remaining retry
+    ld      ($ffbf),a                       ;[c295]
+    jp      nz,fdc_read_retry_c24d          ;[c298] after 256 retry give up and...
     ld      a,$ff                           ;[c29b]
-    ret                                     ;[c29d] return -1?
+    ret                                     ;[c29d] ... return -1
 label_c29e:
     xor     a                               ;[c29e]
-    ret                                     ;[c29f] return 0?
+    ret                                     ;[c29f] return 0
 
     ; TODO this is a FDC routine related to error checking after read/write
 fdc_err_check_c2a0:
     ld      a,($ffc2)                       ;[c2a0] read 2nd status register (ST1)
-    bit     4,a                             ;[c2a3]
-    jr      z,label_c2ab                    ;[c2a5]
-    call    fdc_track0_c391                 ;[c2a7] reset head position if bit 4 is set
-    ret                                     ;[c2aa]
+    bit     4,a                             ;[c2a3] check OverRun bit (OR)
+    jr      z,label_c2ab                    ;[c2a5] if not set, return, else...
+    call    fdc_track0_c391                 ;[c2a7] ...reset head position...
+    ret                                     ;[c2aa] ...and return for retry
 label_c2ab:
     ld      a,($ffc1)                       ;[c2ab] read 3rd status register (ST2)
-    bit     0,a                             ;[c2ae]
-    jr      z,label_c2b6                    ;[c2b0]
-    call    fdc_track0_c391                 ;[c2b2] reset head position if bit 0 is set
-    ret                                     ;[c2b5]
+    bit     0,a                             ;[c2ae] check Missing Address Mark in Data Field (MD) bit
+    jr      z,label_c2b6                    ;[c2b0] if not set, return, else...
+    call    fdc_track0_c391                 ;[c2b2] ...reset head position...
+    ret                                     ;[c2b5] ...and return for retry
 label_c2b6:
-    ret                                     ;[c2b6]
+    ret                                     ;[c2b6] return and just retry
 
     ; Compute number of bytes per sector
     ; Arguments:
@@ -612,15 +612,15 @@ label_c33a:
     out     ($dc),a                         ;[c33a]
     ei                                      ;[c33c]
     call    fdc_rw_status_c3f4              ;[c33d] command response, put it in $ffc0-$ffc6
-    ld      a,($ffc0)                       ;[c340]
-    and     $c0                             ;[c343]
-    cp      $40                             ;[c345] TODO check for error
-    jr      nz,label_c34c                   ;[c347] TODO jump if ok or fail?
-    ld      a,$ff                           ;[c349] return -1?
-    ret                                     ;[c34b]
+    ld      a,($ffc0)                       ;[c340] fetch status (ST0)
+    and     $c0                             ;[c343] mask Interrupt Code bits (as in fdc_sis routine)...
+    cp      $40                             ;[c345]
+    jr      nz,label_c34c                   ;[c347] ... and return if IC != 01 (!= "readfail")
+    ld      a,$ff                           ;[c349]
+    ret                                     ;[c34b] return -1
 label_c34c:
-    xor     a                               ;[c34c] return 0
-    ret                                     ;[c34d]
+    xor     a                               ;[c34c]
+    ret                                     ;[c34d] return 0
 
     ; FDC utility function: send arguments for read or write data commands
 fdc_send_rw_args_c34e:
