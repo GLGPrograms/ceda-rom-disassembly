@@ -1900,12 +1900,13 @@ label_c984:
 
     ; Handle second stage of escaping sequence
 label_c9e3:
-    call    $ca01                           ;[c9e3]
+    call    $ca01                           ;[c9e3] where does this go?
+
     cp      $01                             ;[c9e6]
     jr      nz,label_c9eb                   ;[c9e8]
-    ld      a,c                             ;[c9ea]
+    ld      a,c                             ;[c9ea] C (hopefully) is the char we want to print
 label_c9eb:
-    ld      ($ffd8),a                       ;[c9eb] check "ongoing escape"
+    ld      ($ffd8),a                       ;[c9eb] write C to "ongoing escape"
 
     ; if ("ongoing escape" < $31 || "ongoing escape" >= $60), then
     ;   terminate escaping
@@ -1944,7 +1945,7 @@ label_c9eb:
     ;   jump there
     jp      (hl)                            ;[ca11]
 
-    ; Second stage escape address table
+    ; Second stage escape address table     ;[ca12]
     WORD $cd42  ; use 25 rows
     WORD $cd46  ; use 24 rows
     WORD $ca7a  ; do nothing
@@ -2007,7 +2008,7 @@ label_ca70:
     xor     a                               ;[ca7a]
     ret                                     ;[ca7b] return 0
 
-    call    $cdd7                           ;[ca7c] increment_ffd9_if_zero() ; WARN: may not return here!
+    call    $cdd7                           ;[ca7c] increment_blues_if_zero() ; if (blues == 0), return to $C9FB
 
     cp      $01                             ;[ca7f] fe 01
     jr      nz,label_ca8c                   ;[ca81] 20 09
@@ -2162,18 +2163,19 @@ label_cb27:
 
     add     a                               ;[cb61]
 label_cb62:
-    ld      ($ffc8),a                       ;[cb62] 32 c8 ff
-    call    $cc1b                           ;[cb65] cd 1b cc
+    ld      ($ffc8),a                       ;[cb62]
+    call    $cc1b                           ;[cb65]
 label_cb68:
-    xor     a                               ;[cb68] af
-    ret                                     ;[cb69] c9
+    xor     a                               ;[cb68]
+    ret                                     ;[cb69]
 
-    call    $cdd7                           ;[cb6a] increment_ffd9_if_zero() ; WARN: may not return here!
-    cp      $02                             ;[cb6d]
-    jr      z,label_cb75                    ;[cb6f]
-    call    $c901                           ;[cb71]
+    ; SUBROUTINE CB6A
+    call    $cdd7                           ;[cb6a] increment_blues_if_zero() ; if (blues == 0), return to $C9FB
+    cp      $02                             ;[cb6d] if ("blues" == $02),
+    jr      z,label_cb75                    ;[cb6f]     goto $CB75
+                                            ;       else
+    call    $c901                           ;[cb71]     call to $C901
     ret                                     ;[cb74]
-
 label_cb75:
     ld      a,c                             ;[cb75]
     sub     $20                             ;[cb76]
@@ -2201,7 +2203,7 @@ label_cb9d:
     xor     a                               ;[cb9d] A = 0 (return "ok")
     ret                                     ;[cb9e]
 
-    call    $cdd7                           ;[cb9f] increment_ffd9_if_zero() ; WARN: may not return here!
+    call    $cdd7                           ;[cb9f] increment_blues_if_zero() ; if (blues == 0), return to $C9FB
     ld      a,c                             ;[cba2] 79
     sub     $20                             ;[cba3] d6 20
     ld      c,a                             ;[cba5] 4f
@@ -2218,11 +2220,12 @@ label_cbb9:
     xor     a                               ;[cbb9] af
     ret                                     ;[cbba] c9
 
-    call    $cdd7                           ;[cbbb] increment_ffd9_if_zero() ; WARN: may not return here!
-    cp      $04                             ;[cbbe] fe 04
-    jr      z,label_cbc6                    ;[cbc0] 28 04
-    call    $c901                           ;[cbc2] cd 01 c9
-    ret                                     ;[cbc5] c9
+    call    $cdd7                           ;[cbbb] increment_blues_if_zero() ; if (blues == 0), return to $C9FB
+    cp      $04                             ;[cbbe] if ("blues" == $04)
+    jr      z,label_cbc6                    ;[cbc0]     goto CBC6
+                                            ;       else
+    call    $c901                           ;[cbc2]     call to $c901
+    ret                                     ;[cbc5]
 
 label_cbc6:
     ld      a,c                             ;[cbc6] 79
@@ -2345,7 +2348,7 @@ label_cc6b:
     xor     a                               ;[cc7d] af
     ret                                     ;[cc7e] c9
 
-    call    $cdd7                           ;[cc7f] increment_ffd9_if_zero() ; WARN: may not return here!
+    call    $cdd7                           ;[cc7f] increment_blues_if_zero() ; if (blues == 0), return to $C9FB
     ld      a,c                             ;[cc82] 79
     and     $0f                             ;[cc83] e6 0f
     rlca                                    ;[cc85] 07
@@ -2360,7 +2363,7 @@ label_cc6b:
     xor     a                               ;[cc93] af
     ret                                     ;[cc94] c9
 
-    call    $cdd7                           ;[cc95] increment_ffd9_if_zero() ; WARN: may not return here!
+    call    $cdd7                           ;[cc95] increment_blues_if_zero() ; if (blues == 0), return to $C9FB
     ld      a,c                             ;[cc98] 79
     cp      $30                             ;[cc99] fe 30
     jr      z,label_ccab                    ;[cc9b] 28 0e
@@ -2448,7 +2451,8 @@ label_cd18:
     ld      c,a                             ;[cd21] 4f
     call    $c805                           ;[cd22] cd 05 c8
     jr      label_cd0f                      ;[cd25] 18 e8
-    call    $cdd7                           ;[cd27] increment_ffd9_if_zero() ; WARN: may not return here!
+
+    call    $cdd7                           ;[cd27] increment_blues_if_zero() ; if (blues == 0), return to $C9FB
     cp      $02                             ;[cd2a] fe 02
     jp      nc,$cd8a                        ;[cd2c] d2 8a cd
     ld      a,c                             ;[cd2f] 79
@@ -2544,34 +2548,43 @@ label_cdb5:
     xor     a                               ;[cdb5] af
     ret                                     ;[cdb6] c9
 
-    ld      b,a                             ;[cdb7] 47
-    inc     a                               ;[cdb8] 3c
-    ld      ($ffd9),a                       ;[cdb9] 32 d9 ff
-    ld      hl,($ffda)                      ;[cdbc] 2a da ff
+    ld      b,a                             ;[cdb7]
+    inc     a                               ;[cdb8]
+    ld      ($ffd9),a                       ;[cdb9] unmatched "blues": this is, probably, where it is set
+    ld      hl,($ffda)                      ;[cdbc]
     call    $c715                           ;[cdbf] display_cursor_to_video_mem_ptr()
-    ld      (hl),c                          ;[cdc2] 71
-    ld      a,($bfeb)                       ;[cdc3] 3a eb bf
+    ld      (hl),c                          ;[cdc2]
+    ld      a,($bfeb)                       ;[cdc3]
     call    $c795                           ;[cdc6] bank7_in()
-    ld      (hl),a                          ;[cdc9] 77
+    ld      (hl),a                          ;[cdc9]
     call    $c79e                           ;[cdca] bank7_out()
-    inc     hl                              ;[cdcd] 23
-    ld      ($ffda),hl                      ;[cdce] 22 da ff
-    ld      a,b                             ;[cdd1] 78
-    cp      $47                             ;[cdd2] fe 47
-    ret     nz                              ;[cdd4] c0
-    xor     a                               ;[cdd5] af
-    ret                                     ;[cdd6] c9
+    inc     hl                              ;[cdcd]
+    ld      ($ffda),hl                      ;[cdce]
+    ld      a,b                             ;[cdd1]
+    cp      $47                             ;[cdd2]
+    ret     nz                              ;[cdd4]
+    xor     a                               ;[cdd5]
+    ret                                     ;[cdd6]
 
-    ; SUBROUTINE CDD7: increment_ffd9_if_zero()
-    ; If var$ffd9 == 0, var$ffd9 = 1
-    ; Is this the ending piece / return of other subroutines? there is an unmatched pop from stack
+    ; SUBROUTINE CDD7: increment_blues_if_zero()
+    ; $ffd9 = "blues" (I needed some mnemonic name)
+    ; if (blues == 0)
+    ; {
+    ;   blues = 1;
+    ;   A = 1;
+    ;   return "1" to $C9FB
+    ; }
+    ; else
+    ; {
+    ;   return "blues", normally;
+    ; }
     ld      a,($ffd9)                       ;[cdd7]
-    or      a                               ;[cdda] clear carry flag and check if A == 0
-    ret     nz                              ;[cddb] if A != 0, return
+    or      a                               ;[cdda]
+    ret     nz                              ;[cddb] if ("blues" != 0), return "blues"
     inc     a                               ;[cddc] ++A
     ld      ($ffd9),a                       ;[cddd]
-    pop     hl                              ;[cde0] ???
-    ret                                     ;[cde1]
+    pop     hl                              ;[cde0] remove word from stack, and return
+    ret                                     ;[cde1] this is only called at one point, and will always return to $C9FB (are we sure?)
 
     ; SUBROUTINE CDE2
     call    $c69a                           ;[cde2] bios_load_ix_iy()
