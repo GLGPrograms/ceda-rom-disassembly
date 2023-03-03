@@ -1901,8 +1901,8 @@ label_c9eb:
     jp      (hl)                            ;[ca11]
 
     ; Second stage escape address table
-    WORD $cd42
-    WORD $cd46
+    WORD $cd42  ; use 25 rows
+    WORD $cd46  ; use 24 rows
     WORD $ca7a
     WORD $ca7a
     WORD $ca7a
@@ -2414,18 +2414,21 @@ label_cd18:
     xor     a                               ;[cd40] af
     ret                                     ;[cd41] c9
 
+    ; use 25 rows
 label_cd42:
-    ld      b,$19                           ;[cd42] 06 19
-    jr      label_cd48                      ;[cd44] 18 02
+    ld      b,$19                           ;[cd42] B = 25
+    jr      label_cd48                      ;[cd44]
+    ; use 24 rows
 label_cd46:
-    ld      b,$18                           ;[cd46] 06 18
+    ld      b,$18                           ;[cd46] B = 24
 label_cd48:
-    ld      a,$06                           ;[cd48] 3e 06
-    out     ($a0),a                         ;[cd4a] d3 a0
-    ld      a,b                             ;[cd4c] 78
-    out     ($a1),a                         ;[cd4d] d3 a1
-    xor     a                               ;[cd4f] af
-    ret                                     ;[cd50] c9
+    ; update number of vertical row displayed by CRTC
+    ld      a,$06                           ;[cd48]
+    out     ($a0),a                         ;[cd4a]
+    ld      a,b                             ;[cd4c]
+    out     ($a1),a                         ;[cd4d]
+    xor     a                               ;[cd4f]
+    ret                                     ;[cd50] return 0
 
 
 label_cd51:
