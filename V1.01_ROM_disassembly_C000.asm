@@ -1749,18 +1749,17 @@ label_c8ea:
     pop     hl                              ;[c92d] restore result of first call in HL
     ld      b,a                             ;[c92e] B = A (the same from caller, is always preserved)
     call    $c795                           ;[c92f] bank7_in()
+
+                                            ;       do {
 label_c932:
-    call    $c715                           ;[c932] display_cursor_to_video_mem_ptr()
-    ld      a,(hl)                          ;[c935] 7e
-    or      b                               ;[c936] b0
-    ld      (hl),a                          ;[c937] 77
-    inc     hl                              ;[c938] 23
-    dec     de                              ;[c939] 1b
-    ld      a,d                             ;[c93a] 7a
-    or      e                               ;[c93b] b3
-    jr      nz,label_c932                   ;[c93c] 20 f4
-    call    $c79e                           ;[c93e] bank7_out()
-    ret                                     ;[c941] c9
+    call    $c715                           ;[c932]     display_cursor_to_video_mem_ptr()
+
+    ld      a,(hl)                          ;[c935]     mangle video memory, OR with A (passed by caller)
+    or      b                               ;[c936]
+    ld      (hl),a                          ;[c937]
+
+    inc     hl                              ;[c938]     next address
+    dec     de                              ;[c939]     loop index--
 
     ld      a,d                             ;[c93a]
     or      e                               ;[c93b]
@@ -1837,36 +1836,42 @@ label_c984:
     xor     a                               ;[c99a]
     ret                                     ;[c99b]
 
+    ; SUBROUTINE C99C
     ; reset magenta:0
     ld      hl,$ffd1                        ;[c99c] 21 d1 ff
     res     0,(hl)                          ;[c99f] cb 86
     xor     a                               ;[c9a1] af
     ret                                     ;[c9a2] c9
 
+    ; SUBROUTINE C9A3
     ; set magenta:2
     ld      hl,$ffd1                        ;[c9a3]
     set     2,(hl)                          ;[c9a6]
     xor     a                               ;[c9a8]
     ret                                     ;[c9a9]
 
+    ; SUBROUTINE C9AA
     ; reset magenta:2
-    ld      hl,$ffd1                        ;[c9aa] 21 d1 ff
-    res     2,(hl)                          ;[c9ad] cb 96
-    xor     a                               ;[c9af] af
-    ret                                     ;[c9b0] c9
+    ld      hl,$ffd1                        ;[c9aa]
+    res     2,(hl)                          ;[c9ad]
+    xor     a                               ;[c9af]
+    ret                                     ;[c9b0]
 
+    ; SUBROUTINE C9B1
     ; set magenta 1
     ld      hl,$ffd1                        ;[c9b1]
     set     1,(hl)                          ;[c9b4]
     xor     a                               ;[c9b6]
     ret                                     ;[c9b7]
 
+    ; SUBROUTINE C9B8
     ; reset magenta 1
     ld      hl,$ffd1                        ;[c9b8]
     res     1,(hl)                          ;[c9bb]
     xor     a                               ;[c9bd]
     ret                                     ;[c9be]
 
+    ; SUBROUTINE C9BF
     ; set magenta:4
     ld      a,($ffd1)                       ;[c9bf]
     and     $8f                             ;[c9c2]
@@ -1875,6 +1880,7 @@ label_c984:
     xor     a                               ;[c9c9]
     ret                                     ;[c9ca]
 
+    ; SUBROUTINE C9CB
     ; reset magenta[4:6]
     ld      a,($ffd1)                       ;[c9cb]
     and     $8f                             ;[c9ce]
@@ -1883,6 +1889,7 @@ label_c984:
     xor     a                               ;[c9d5]
     ret                                     ;[c9d6]
 
+    ; SUBROUTINE C9D7
     ; set magenta:5
     ld      a,($ffd1)                       ;[c9d7]
     and     $8f                             ;[c9da]
@@ -1912,6 +1919,7 @@ label_c9eb:
     ;       and finally perform escape
     ; The value is clamped in this range because it will be used to index a jump table.
     call    $ca05                           ;[c9f8]
+
     or      a                               ;[c9fb]
     jr      z,label_ca70                    ;[c9fc] if (A == 0), terminate escape sequence, else...
     jp      $c6a3                           ;[c9fe] ... save_index_restore_registers_and_ret(), and continue escaping next time
