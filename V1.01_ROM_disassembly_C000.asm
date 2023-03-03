@@ -2066,95 +2066,98 @@ label_cad2:
     xor     a                               ;[cad2] af
     ret                                     ;[cad3] c9
 
-    call    $cdd7                           ;[cad4] increment_ffd9_if_zero() ; WARN: may not return here!
-    cp      $04                             ;[cad7] fe 04
-    jr      z,label_cadf                    ;[cad9] 28 04
-    call    $c901                           ;[cadb] cd 01 c9
-    ret                                     ;[cade] c9
-
+    call    $cdd7                           ;[cad4] increment_blues_if_zero() ; if (blues == 0), return to $C9FB
+    cp      $04                             ;[cad7] if ("blues" == $04)
+    jr      z,label_cadf                    ;[cad9]     jump to $cadf
+                                            ;       else
+    call    $c901                           ;[cadb]     call to $c901
+    ret                                     ;[cade]
 label_cadf:
-    ld      a,c                             ;[cadf] 79
-    sub     $20                             ;[cae0] d6 20
-    ld      e,a                             ;[cae2] 5f
-    ld      hl,$ffda                        ;[cae3] 21 da ff
-    ld      b,(hl)                          ;[cae6] 46
-    inc     hl                              ;[cae7] 23
-    ld      c,(hl)                          ;[cae8] 4e
-    inc     hl                              ;[cae9] 23
-    ld      d,(hl)                          ;[caea] 56
-    ld      a,$01                           ;[caeb] 3e 01
-    call    $c91d                           ;[caed] cd 1d c9
-    xor     a                               ;[caf0] af
-    ret                                     ;[caf1] c9
+    ld      a,c                             ;[cadf]
+    sub     $20                             ;[cae0]
+    ld      e,a                             ;[cae2] E = C - 0x20
+    ld      hl,$ffda                        ;[cae3]
+    ld      b,(hl)                          ;[cae6] B = cyan[0]
+    inc     hl                              ;[cae7]
+    ld      c,(hl)                          ;[cae8] C = cyan[1]
+    inc     hl                              ;[cae9]
+    ld      d,(hl)                          ;[caea] D = cyan[2]
+    ld      a,$01                           ;[caeb] A = 0x01
+    call    $c91d                           ;[caed] display_mangle_some_banked_memory()
+    xor     a                               ;[caf0]
+    ret                                     ;[caf1] return 0
 
-    call    $cdd7                           ;[caf2] increment_ffd9_if_zero() ; WARN: may not return here!
+    call    $cdd7                           ;[caf2] increment_blues_if_zero() ; if (blues == 0), return to $C9FB
     cp      $02                             ;[caf5] fe 02
     jr      z,label_cafd                    ;[caf7] 28 04
     call    $c901                           ;[caf9] cd 01 c9
     ret                                     ;[cafc] c9
 
 label_cafd:
-    ld      a,c                             ;[cafd] 79
-    sub     $20                             ;[cafe] d6 20
-    ld      e,a                             ;[cb00] 5f
-    ld      a,($ffda)                       ;[cb01] 3a da ff
-    ld      d,a                             ;[cb04] 57
-    ld      a,($ffd3)                       ;[cb05] 3a d3 ff
-    and     $60                             ;[cb08] e6 60
-    or      d                               ;[cb0a] b2
-    ld      ($ffd3),a                       ;[cb0b] 32 d3 ff
-    ld      c,a                             ;[cb0e] 4f
-    ld      b,$0a                           ;[cb0f] 06 0a
-    call    $c916                           ;[cb11] cd 16 c9
-    ld      c,e                             ;[cb14] 4b
-    ld      b,$0b                           ;[cb15] 06 0b
-    call    $c916                           ;[cb17] cd 16 c9
-    xor     a                               ;[cb1a] af
-    ret                                     ;[cb1b] c9
+    ld      a,c                             ;[cafd]
+    sub     $20                             ;[cafe]
+    ld      e,a                             ;[cb00]
+    ld      a,($ffda)                       ;[cb01]
+    ld      d,a                             ;[cb04]
+    ld      a,($ffd3)                       ;[cb05]
+    and     $60                             ;[cb08]
+    or      d                               ;[cb0a]
+    ld      ($ffd3),a                       ;[cb0b]
+    ld      c,a                             ;[cb0e]
+    ld      b,$0a                           ;[cb0f]
+    call    $c916                           ;[cb11] crtc_write_register()
+    ld      c,e                             ;[cb14]
+    ld      b,$0b                           ;[cb15]
+    call    $c916                           ;[cb17] crtc_write_register()
+    xor     a                               ;[cb1a]
+    ret                                     ;[cb1b]
 
-    ; SUBROUTINE CB1C
-    call    $cdd7                           ;[cb1c] increment_ffd9_if_zero() ; WARN: may not return here!
-    cp      $04                             ;[cb1f] fe 04
-    jr      z,label_cb27                    ;[cb21] 28 04
-    call    $c901                           ;[cb23] cd 01 c9
-    ret                                     ;[cb26] c9
+    call    $cdd7                           ;[cb1c] increment_blues_if_zero() ; if (blues == 0), return to $C9FB
+    cp      $04                             ;[cb1f] if ("blues" == $04)
+    jr      z,label_cb27                    ;[cb21]     goto $CB27
+                                            ;       else
+    call    $c901                           ;[cb23]     call to $c901
+    ret                                     ;[cb26]
+
 label_cb27:
-    ld      a,c                             ;[cb27] 79
-    sub     $20                             ;[cb28] d6 20
-    ld      e,a                             ;[cb2a] 5f
-    ld      a,$4f                           ;[cb2b] 3e 4f
-    cp      e                               ;[cb2d] bb
-    jr      c,label_cb68                    ;[cb2e] 38 38
-    ld      hl,$ffda                        ;[cb30] 21 da ff
-    ld      b,(hl)                          ;[cb33] 46
-    inc     hl                              ;[cb34] 23
-    ld      a,(hl)                          ;[cb35] 7e
-    cp      $18                             ;[cb36] fe 18
-    jr      nc,label_cb68                   ;[cb38] 30 2e
-    ld      c,a                             ;[cb3a] 4f
-    inc     hl                              ;[cb3b] 23
-    ld      d,(hl)                          ;[cb3c] 56
-    ld      a,c                             ;[cb3d] 79
-    cp      b                               ;[cb3e] b8
-    jr      c,label_cb68                    ;[cb3f] 38 27
-    ld      a,e                             ;[cb41] 7b
-    cp      d                               ;[cb42] ba
-    jr      c,label_cb68                    ;[cb43] 38 23
+    ld      a,c                             ;[cb27]
+    sub     $20                             ;[cb28]
+    ld      e,a                             ;[cb2a]
+    ld      a,$4f                           ;[cb2b] A = 79
+    cp      e                               ;[cb2d]
+    jr      c,label_cb68                    ;[cb2e] if (E > 79), return 0
+    ld      hl,$ffda                        ;[cb30]
+    ld      b,(hl)                          ;[cb33] B = cyan[0]
+    inc     hl                              ;[cb34]
+    ld      a,(hl)                          ;[cb35] A = cyan[1]
+    cp      $18                             ;[cb36]
+    jr      nc,label_cb68                   ;[cb38] if (A >= 24), return 0
+    ld      c,a                             ;[cb3a] C = cyan[1]
+    inc     hl                              ;[cb3b]
+    ld      d,(hl)                          ;[cb3c] D = cyan[2]
+    ld      a,c                             ;[cb3d]
+    cp      b                               ;[cb3e]
+    jr      c,label_cb68                    ;[cb3f] if (B > cyan[1]), return 0
+    ld      a,e                             ;[cb41]
+    cp      d                               ;[cb42]
+    jr      c,label_cb68                    ;[cb43] if (D > E), return 0
+
     ld      hl,$ffcd                        ;[cb45]
-    ld      (hl),c                          ;[cb48] write "number of rows" of display
-    inc     hl                              ;[cb49] 23
-    ld      (hl),b                          ;[cb4a] 70
-    inc     hl                              ;[cb4b] 23
-    ld      (hl),e                          ;[cb4c] 73
-    inc     hl                              ;[cb4d] 23
-    ld      (hl),d                          ;[cb4e] 72
-    ld      a,$01                           ;[cb4f] 3e 01
-    ld      ($ffc9),a                       ;[cb51] 32 c9 ff
-    ld      a,$50                           ;[cb54] 3e 50
-    sub     e                               ;[cb56] 93
-    ld      e,a                             ;[cb57] 5f
-    ld      a,d                             ;[cb58] 7a
-    add     e                               ;[cb59] 83
+    ld      (hl),c                          ;[cb48] write "number of rows" of display (at $ffcd)
+    inc     hl                              ;[cb49]
+    ld      (hl),b                          ;[cb4a] at $ffce
+    inc     hl                              ;[cb4b]
+    ld      (hl),e                          ;[cb4c] at $ffcf
+    inc     hl                              ;[cb4d]
+    ld      (hl),d                          ;[cb4e] at $ffd0
+    ld      a,$01                           ;[cb4f]
+    ld      ($ffc9),a                       ;[cb51]
+
+    ld      a,$50                           ;[cb54] A = 80
+    sub     e                               ;[cb56]
+    ld      e,a                             ;[cb57]
+    ld      a,d                             ;[cb58]
+    add     e                               ;[cb59]
 
     ; if magenta:3 == 0, jump label_cb62
     ld      hl,$ffd1                        ;[cb5a]
@@ -2190,10 +2193,10 @@ label_cb75:
     add     a                               ;[cb86]
     ld      c,a                             ;[cb87]         C *= 2
 label_cb88:
-    ld      a,($ffda)                       ;[cb88]
-    cp      $19                             ;[cb8b]     compare var$FFDA with 25 (number of display rows + 1)
-    jr      nc,label_cb9d                   ;[cb8d]     if var$FFDA <= 25, then
-    ld      b,a                             ;[cb8f]         current_row = var$FFDA
+    ld      a,($ffda)                       ;[cb88]     read cyan[0]
+    cp      $19                             ;[cb8b]     compare cyan[0] with 25 (number of display rows + 1)
+    jr      nc,label_cb9d                   ;[cb8d]     if cyan[0] <= 25, then
+    ld      b,a                             ;[cb8f]         current_row = cyan[0]
     ld      ($ffcb),a                       ;[cb90]         store current_row in var$FFCB
     ld      a,c                             ;[cb93]
     ld      ($ffca),a                       ;[cb94]         store current_column in var$FFCA
@@ -2228,19 +2231,19 @@ label_cbb9:
     ret                                     ;[cbc5]
 
 label_cbc6:
-    ld      a,c                             ;[cbc6] 79
-    sub     $20                             ;[cbc7] d6 20
-    ld      e,a                             ;[cbc9] 5f
-    ld      hl,$ffda                        ;[cbca] 21 da ff
-    ld      b,(hl)                          ;[cbcd] 46
-    inc     hl                              ;[cbce] 23
-    ld      c,(hl)                          ;[cbcf] 4e
-    inc     hl                              ;[cbd0] 23
-    ld      d,(hl)                          ;[cbd1] 56
-    ld      a,($ffd2)                       ;[cbd2] 3a d2 ff
-    call    $c91d                           ;[cbd5] cd 1d c9
-    xor     a                               ;[cbd8] af
-    ret                                     ;[cbd9] c9
+    ld      a,c                             ;[cbc6]
+    sub     $20                             ;[cbc7]
+    ld      e,a                             ;[cbc9]
+    ld      hl,$ffda                        ;[cbca]
+    ld      b,(hl)                          ;[cbcd] B = cyan[0]
+    inc     hl                              ;[cbce]
+    ld      c,(hl)                          ;[cbcf] C = cyan[1]
+    inc     hl                              ;[cbd0]
+    ld      d,(hl)                          ;[cbd1] D = cyan[2]
+    ld      a,($ffd2)                       ;[cbd2] A = *($ffd2)
+    call    $c91d                           ;[cbd5] display_mangle_some_banked_memory()
+    xor     a                               ;[cbd8]
+    ret                                     ;[cbd9]
 
     ; some display-related routine
     ld      bc,$0780                        ;[cbda]
