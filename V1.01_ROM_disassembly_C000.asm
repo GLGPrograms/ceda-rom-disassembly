@@ -13,8 +13,8 @@ _main:
     jp      $c027                           ;[c012] reset SIO interrupts
     jp      $c027                           ;[c015] reset SIO interrupts
     jp      fdc_rwfs_c19d                   ;[c018] floppy disk software driver
-    jp      $c18f                           ;[c01b]
-    jp      $c174                           ;[c01e]
+    jp      putstr                          ;[c01b] print null-terminated string
+    jp      prhex                           ;[c01e] print a byte as hex
     jp      $cde2                           ;[c021]
     jp      $cdf4                           ;[c024]
 
@@ -320,36 +320,47 @@ sio_chB_cfg_base:
     out     ($de),a                         ;[c171]/[001c] and copy same value in $de
     ret                                     ;[c173]/[001e]
 
-    push    af                              ;[c174] f5
-    rrca                                    ;[c175] 0f
-    rrca                                    ;[c176] 0f
-    rrca                                    ;[c177] 0f
-    rrca                                    ;[c178] 0f
-    and     $0f                             ;[c179] e6 0f
-    call    $c181                           ;[c17b] cd 81 c1
-    pop     af                              ;[c17e] f1
-    and     $0f                             ;[c17f] e6 0f
-    call    $c187                           ;[c181] cd 87 c1
-    jp      $c45e                           ;[c184] c3 5e c4
-    add     $90                             ;[c187] c6 90
-    daa                                     ;[c189] 27
-    adc     $40                             ;[c18a] ce 40
-    daa                                     ;[c18c] 27
-    ld      c,a                             ;[c18d] 4f
-    ret                                     ;[c18e] c9
+    ; prhex(a) - prints the hex value in a
+    ; This function is a "giro di labbrate" (i.e. spaghetti code, very hard to explain line by line)
+prhex:
+    push    af                              ;[c174] save a
+    rrca                                    ;[c175]
+    rrca                                    ;[c176]
+    rrca                                    ;[c177]
+    rrca                                    ;[c178]
+    and     $0f                             ;[c179] take most significant nibble
+    call    prmsn                           ;[c17b] convert to ASCII digit and print it (0-9A-F)
+    pop     af                              ;[c17e] restore a
+    and     $0f                             ;[c17f] take least significant nibble
+prmsn:
+    call    tohex                           ;[c181] convert to ASCII digit
+    jp      $c45e                           ;[c184] print it (0-9A-F)
+; Interesting part of code that converts least significant nibble in a
+; to an ASCII digit
+tohex:
+    add     $90                             ;[c187]
+    daa                                     ;[c189] decimal adjust
+    adc     $40                             ;[c18a]
+    daa                                     ;[c18c] decimal adjust
+    ld      c,a                             ;[c18d] move a in c for putchar(c)
+    ret                                     ;[c18e]
 
-    ex      (sp),hl                         ;[c18f] e3
+; putstr: prints a null-terminated string
+; String is passed as a pointer pushed onto the stack.
+; The argument pointer is altered, function will always return it pointing to first location after string terminator.
+putstr:
+    ex      (sp),hl                         ;[c18f] load the argument from the stack in hl
 label_c190:
-    ld      a,(hl)                          ;[c190] 7e
-    inc     hl                              ;[c191] 23
-    or      a                               ;[c192] b7
-    jr      z,label_c19b                    ;[c193] 28 06
-    ld      c,a                             ;[c195] 4f
-    call    $c45e                           ;[c196] cd 5e c4
-    jr      label_c190                      ;[c199] 18 f5
+    ld      a,(hl)                          ;[c190]
+    inc     hl                              ;[c191] a = *(hl++)
+    or      a                               ;[c192]
+    jr      z,label_c19b                    ;[c193] return if a == '\0'
+    ld      c,a                             ;[c195]
+    call    $c45e                           ;[c196] putchar(a)
+    jr      label_c190                      ;[c199] repeat again
 label_c19b:
-    ex      (sp),hl                         ;[c19b] e3
-    ret                                     ;[c19c] c9
+    ex      (sp),hl                         ;[c19b] reload altered hl onto the stack
+    ret                                     ;[c19c]
 
     ; FDC Read Write Format Seek routine.
     ; Arguments:
