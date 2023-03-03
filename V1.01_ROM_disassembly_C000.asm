@@ -1677,11 +1677,11 @@ label_c8d7:
     ret                                     ;[c8de] c9
 
     ; some display-related stuff
-    ld      a,($ffd9)                       ;[c8df]
+    ld      a,($ffd9)                       ;[c8df] read "blues"
     or      a                               ;[c8e2]
     jr      nz,label_c8ea                   ;[c8e3]
     inc     a                               ;[c8e5]
-    ld      ($ffd9),a                       ;[c8e6]
+    ld      ($ffd9),a                       ;[c8e6] store "blues"
     ret                                     ;[c8e9]
 
 label_c8ea:
@@ -1706,18 +1706,21 @@ label_c8ea:
 
     ; SUBROUTINE C901
     ; Read a value and do things with it :TM:
-    ld      a,($ffd9)                       ;[c901]
-    ld      b,a                             ;[c904]
+    ld      a,($ffd9)                       ;[c901] read "blues" content
+    ld      b,a                             ;[c904] and remember its value in B register
+
     ld      d,$00                           ;[c905]
     ld      e,a                             ;[c907] DE = A
-    ld      hl,$ffd9                        ;[c908]
+    ld      hl,$ffd9                        ;[c908] HL = &"blues"
     add     hl,de                           ;[c90b] HL += A
     ld      a,c                             ;[c90c]
     sub     $20                             ;[c90d] C -= 32
     ld      (hl),a                          ;[c90f] store A in (HL)
+                                            ; blues[blues[0]] = (C - 0x20)
+
     ld      a,b                             ;[c910]
     inc     a                               ;[c911]
-    ld      ($ffd9),a                       ;[c912] store A
+    ld      ($ffd9),a                       ;[c912] store A in "blues"
     ret                                     ;[c915]
 
     ld      a,b                             ;[c916] 78
@@ -1964,7 +1967,7 @@ label_c9eb:
 label_ca70:
     xor     a                               ;[ca70]
     ld      ($ffd8),a                       ;[ca71] set "no ongoing escaping"
-    ld      ($ffd9),a                       ;[ca74] ???
+    ld      ($ffd9),a                       ;[ca74] "blues" = 0
     jp      $c6a3                           ;[ca77] save_index_restore_registers_and_ret()
 
     ; SUBMONSTER CA7A: return 0.
@@ -2480,24 +2483,24 @@ label_cd88:
     ret                                     ;[cd89] c9
 
 label_cd8a:
-    ld      a,c                             ;[cd8a] 79
-    cp      $0d                             ;[cd8b] fe 0d
-    jr      z,label_cdb5                    ;[cd8d] 28 26
-    ld      a,($ffd9)                       ;[cd8f] 3a d9 ff
-    cp      $01                             ;[cd92] fe 01
-    jr      z,label_cd9a                    ;[cd94] 28 04
-    call    $cdb7                           ;[cd96] cd b7 cd
-    ret                                     ;[cd99] c9
+    ld      a,c                             ;[cd8a]
+    cp      $0d                             ;[cd8b]
+    jr      z,label_cdb5                    ;[cd8d]
+    ld      a,($ffd9)                       ;[cd8f] read "blues"
+    cp      $01                             ;[cd92]
+    jr      z,label_cd9a                    ;[cd94]
+    call    $cdb7                           ;[cd96]
+    ret                                     ;[cd99]
 
 label_cd9a:
-    ld      b,$18                           ;[cd9a] 06 18
-    ld      c,$00                           ;[cd9c] 0e 00
+    ld      b,$18                           ;[cd9a]
+    ld      c,$00                           ;[cd9c]
     call    $c6f1                           ;[cd9e] display_add_row_column()
-    ld      ($ffda),hl                      ;[cda1] 22 da ff
-    ld      a,$02                           ;[cda4] 3e 02
-    ld      ($ffd9),a                       ;[cda6] 32 d9 ff
-    ld      b,$46                           ;[cda9] 06 46
-    ld      c,$20                           ;[cdab] 0e 20
+    ld      ($ffda),hl                      ;[cda1]
+    ld      a,$02                           ;[cda4]
+    ld      ($ffd9),a                       ;[cda6] read "blues"
+    ld      b,$46                           ;[cda9]
+    ld      c,$20                           ;[cdab]
 label_cdad:
     call    $c715                           ;[cdad] display_cursor_to_video_mem_ptr()
     ld      (hl),c                          ;[cdb0] 71
