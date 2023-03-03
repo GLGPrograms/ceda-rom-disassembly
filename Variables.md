@@ -25,7 +25,7 @@
 | ffce    | 1    | column         |       |                                                                                                                 |
 | ffcf    | 1    |                |       | set to 0, then never changed?                                                                                   |
 | ffd0    |      |                |       |                                                                                                                 |
-| ffd1    |      | magenta        | [3]   | looks like an important bitmap; bit 3 is checked a lot of time; nothing to do with colors, just a mnemonic name |
+| ffd1    |      | magenta        | [3,4] | looks like an important bitmap; bit 3 is checked a lot of time; nothing to do with colors, just a mnemonic name |
 | ffd2    |      |                |       |                                                                                                                 |
 | ffd3    |      |                |       |                                                                                                                 |
 | ffd4    | 2    | IX             | -     | text cursor X position (?)                                                                                      |

@@ -1676,12 +1676,13 @@ label_c8d7:
     jr      nz,label_c8d7                   ;[c8dc] 20 f9
     ret                                     ;[c8de] c9
 
-    ld      a,($ffd9)                       ;[c8df] 3a d9 ff
-    or      a                               ;[c8e2] b7
-    jr      nz,label_c8ea                   ;[c8e3] 20 05
-    inc     a                               ;[c8e5] 3c
-    ld      ($ffd9),a                       ;[c8e6] 32 d9 ff
-    ret                                     ;[c8e9] c9
+    ; some display-related stuff
+    ld      a,($ffd9)                       ;[c8df]
+    or      a                               ;[c8e2]
+    jr      nz,label_c8ea                   ;[c8e3]
+    inc     a                               ;[c8e5]
+    ld      ($ffd9),a                       ;[c8e6]
+    ret                                     ;[c8e9]
 
 label_c8ea:
     ld      a,c                             ;[c8ea] 79
@@ -1698,9 +1699,10 @@ label_c8ea:
     xor     a                               ;[c8fa] af
     ret                                     ;[c8fb] c9
 
-    xor     a                               ;[c8fc] af
-    ld      ($ffd1),a                       ;[c8fd] 32 d1 ff
-    ret                                     ;[c900] c9
+    ; SUBROUTINE C8FC: reset magenta.
+    xor     a                               ;[c8fc]
+    ld      ($ffd1),a                       ;[c8fd]
+    ret                                     ;[c900]
 
     ; SUBROUTINE C901
     ; Read a value and do things with it :TM:
@@ -1802,58 +1804,65 @@ label_c984:
     xor     a                               ;[c993] af
     ret                                     ;[c994] c9
 
-    ; MAYBE -- BEGIN OF SOME DATA
-    ld      hl,$ffd1                        ;[c995] 21 d1 ff
-    set     0,(hl)                          ;[c998] cb c6
-    xor     a                               ;[c99a] af
-    ret                                     ;[c99b] c9
+    ; set magenta:0
+    ld      hl,$ffd1                        ;[c995]
+    set     0,(hl)                          ;[c998]
+    xor     a                               ;[c99a]
+    ret                                     ;[c99b]
 
+    ; reset magenta:0
     ld      hl,$ffd1                        ;[c99c] 21 d1 ff
     res     0,(hl)                          ;[c99f] cb 86
     xor     a                               ;[c9a1] af
     ret                                     ;[c9a2] c9
 
-    ld      hl,$ffd1                        ;[c9a3] 21 d1 ff
-    set     2,(hl)                          ;[c9a6] cb d6
-    xor     a                               ;[c9a8] af
-    ret                                     ;[c9a9] c9
+    ; set magenta:2
+    ld      hl,$ffd1                        ;[c9a3]
+    set     2,(hl)                          ;[c9a6]
+    xor     a                               ;[c9a8]
+    ret                                     ;[c9a9]
 
+    ; reset magenta:2
     ld      hl,$ffd1                        ;[c9aa] 21 d1 ff
     res     2,(hl)                          ;[c9ad] cb 96
     xor     a                               ;[c9af] af
     ret                                     ;[c9b0] c9
 
-    ld      hl,$ffd1                        ;[c9b1] 21 d1 ff
-    set     1,(hl)                          ;[c9b4] cb ce
-    xor     a                               ;[c9b6] af
-    ret                                     ;[c9b7] c9
+    ; set magenta 1
+    ld      hl,$ffd1                        ;[c9b1]
+    set     1,(hl)                          ;[c9b4]
+    xor     a                               ;[c9b6]
+    ret                                     ;[c9b7]
 
-    ld      hl,$ffd1                        ;[c9b8] 21 d1 ff
-    res     1,(hl)                          ;[c9bb] cb 8e
-    xor     a                               ;[c9bd] af
-    ret                                     ;[c9be] c9
-    ; MAYBE -- END OF SOME DATA
+    ; reset magenta 1
+    ld      hl,$ffd1                        ;[c9b8]
+    res     1,(hl)                          ;[c9bb]
+    xor     a                               ;[c9bd]
+    ret                                     ;[c9be]
 
-    ld      a,($ffd1)                       ;[c9bf] 3a d1 ff
-    and     $8f                             ;[c9c2] e6 8f
-    or      $10                             ;[c9c4] f6 10
-    ld      ($ffd1),a                       ;[c9c6] 32 d1 ff
-    xor     a                               ;[c9c9] af
-    ret                                     ;[c9ca] c9
+    ; set magenta:4
+    ld      a,($ffd1)                       ;[c9bf]
+    and     $8f                             ;[c9c2]
+    or      $10                             ;[c9c4]
+    ld      ($ffd1),a                       ;[c9c6]
+    xor     a                               ;[c9c9]
+    ret                                     ;[c9ca]
 
-    ld      a,($ffd1)                       ;[c9cb] 3a d1 ff
-    and     $8f                             ;[c9ce] e6 8f
-    or      $00                             ;[c9d0] f6 00
-    ld      ($ffd1),a                       ;[c9d2] 32 d1 ff
-    xor     a                               ;[c9d5] af
-    ret                                     ;[c9d6] c9
+    ; reset magenta[4:6]
+    ld      a,($ffd1)                       ;[c9cb]
+    and     $8f                             ;[c9ce]
+    or      $00                             ;[c9d0]
+    ld      ($ffd1),a                       ;[c9d2]
+    xor     a                               ;[c9d5]
+    ret                                     ;[c9d6]
 
-    ld      a,($ffd1)                       ;[c9d7] 3a d1 ff
-    and     $8f                             ;[c9da] e6 8f
-    or      $20                             ;[c9dc] f6 20
-    ld      ($ffd1),a                       ;[c9de] 32 d1 ff
-    xor     a                               ;[c9e1] af
-    ret                                     ;[c9e2] c9
+    ; set magenta:5
+    ld      a,($ffd1)                       ;[c9d7]
+    and     $8f                             ;[c9da]
+    or      $20                             ;[c9dc]
+    ld      ($ffd1),a                       ;[c9de]
+    xor     a                               ;[c9e1]
+    ret                                     ;[c9e2]
 
     ; Handle second stage of escaping sequence
 label_c9e3:
@@ -1907,7 +1916,7 @@ label_c9eb:
     WORD $ca7a  ; do nothing
     WORD $ca7a  ; do nothing
     WORD $ca7c
-    WORD $c9bf
+    WORD $c9bf  ; set magenta:4
     WORD $cc7f
     WORD $ca7a  ; do nothing
     WORD $cad4
@@ -1917,19 +1926,19 @@ label_c9eb:
     WORD $cb9f
     WORD $cbbb
     WORD $ca7c
-    WORD $c875
-    WORD $c8ac
+    WORD $c875  ; set magenta:3, and some other stuff
+    WORD $c8ac  ; clear magenta:3
     WORD $ca7a  ; do nothing
     WORD $c942
     WORD $c942
     WORD $c942
     WORD $c942
-    WORD $c995
-    WORD $c99c
-    WORD $c9a3
-    WORD $c9aa
-    WORD $c9b1
-    WORD $c9b8
+    WORD $c995  ; set magenta:0
+    WORD $c99c  ; reset magenta:0
+    WORD $c9a3  ; set magenta:2
+    WORD $c9aa  ; reset magenta:2
+    WORD $c9b1  ; set magenta:1
+    WORD $c9b8  ; reset magenta:1
     WORD $cc45
     WORD $ca7a  ; do nothing
     WORD $ccab
@@ -1938,14 +1947,14 @@ label_c9eb:
     WORD $cbda
     WORD $cc04
     WORD $cc1b
-    WORD $cc33
-    WORD $c9bf
-    WORD $c9cb
-    WORD $c9d7
-    WORD $c9bf
+    WORD $cc33  ; clear display ?
+    WORD $c9bf  ; set magenta:4
+    WORD $c9cb  ; reset magenta[4:6]
+    WORD $c9d7  ; set magenta:5
+    WORD $c9bf  ; set magenta:4
     WORD $cc7f
     WORD $c8df
-    WORD $c8fc
+    WORD $c8fc  ; reset all bits of magenta
     WORD $cc95
     WORD $cd27
 
@@ -2195,21 +2204,22 @@ label_cbc6:
     xor     a                               ;[cbd8] af
     ret                                     ;[cbd9] c9
 
-    ld      bc,$0780                        ;[cbda] 01 80 07
-    push    ix                              ;[cbdd] dd e5
-    pop     hl                              ;[cbdf] e1
+    ; some display-related routine
+    ld      bc,$0780                        ;[cbda]
+    push    ix                              ;[cbdd]
+    pop     hl                              ;[cbdf]
     call    $c795                           ;[cbe0] bank7_in()
-    ld      a,($ffd2)                       ;[cbe3] 3a d2 ff
-    ld      d,a                             ;[cbe6] 57
-    ld      e,$20                           ;[cbe7] 1e 20
+    ld      a,($ffd2)                       ;[cbe3]
+    ld      d,a                             ;[cbe6]
+    ld      e,$20                           ;[cbe7]
 label_cbe9:
     call    $c715                           ;[cbe9] display_cursor_to_video_mem_ptr()
-    ld      a,(hl)                          ;[cbec] 7e
-    and     d                               ;[cbed] a2
-    jr      nz,label_cbf9                   ;[cbee] 20 09
-    ld      (hl),$00                        ;[cbf0] 36 00
+    ld      a,(hl)                          ;[cbec]
+    and     d                               ;[cbed]
+    jr      nz,label_cbf9                   ;[cbee]
+    ld      (hl),$00                        ;[cbf0]
     call    $c795                           ;[cbf2] bank7_in()
-    ld      (hl),e                          ;[cbf5] 73
+    ld      (hl),e                          ;[cbf5]
     call    $c795                           ;[cbf6] bank7_in()
 label_cbf9:
     inc     hl                              ;[cbf9] 23
@@ -2221,32 +2231,35 @@ label_cbf9:
     xor     a                               ;[cc02] af
     ret                                     ;[cc03] c9
 
-    ld      a,($ffd0)                       ;[cc04] 3a d0 ff
-    ld      c,a                             ;[cc07] 4f
-    ld      a,($ffce)                       ;[cc08] 3a ce ff
-    ld      b,a                             ;[cc0b] 47
-    ld      a,($ffcf)                       ;[cc0c] 3a cf ff
-    ld      e,a                             ;[cc0f] 5f
+    ; some display-related routine
+    ld      a,($ffd0)                       ;[cc04]
+    ld      c,a                             ;[cc07]
+    ld      a,($ffce)                       ;[cc08]
+    ld      b,a                             ;[cc0b]
+    ld      a,($ffcf)                       ;[cc0c]
+    ld      e,a                             ;[cc0f]
     ld      a,($ffcd)                       ;[cc10] read "number of rows" of display
-    ld      d,a                             ;[cc13] 57
-    call    $c805                           ;[cc14] cd 05 c8
-    call    $cc1b                           ;[cc17] cd 1b cc
-    ret                                     ;[cc1a] c9
+    ld      d,a                             ;[cc13]
+    call    $c805                           ;[cc14]
+    call    $cc1b                           ;[cc17]
+    ret                                     ;[cc1a]
 
-    ld      a,($ffce)                       ;[cc1b] 3a ce ff
-    ld      b,a                             ;[cc1e] 47
-    ld      a,($ffd0)                       ;[cc1f] 3a d0 ff
-    ld      c,a                             ;[cc22] 4f
+    ; some display-related routine
+    ld      a,($ffce)                       ;[cc1b]
+    ld      b,a                             ;[cc1e]
+    ld      a,($ffd0)                       ;[cc1f]
+    ld      c,a                             ;[cc22]
     call    $c6f1                           ;[cc23] display_add_row_column()
     call    $c71c                           ;[cc26] crtc_update_cursor_position()
-    ld      a,b                             ;[cc29] 78
-    ld      ($ffcb),a                       ;[cc2a] 32 cb ff
-    ld      a,c                             ;[cc2d] 79
-    ld      ($ffca),a                       ;[cc2e] 32 ca ff
-    xor     a                               ;[cc31] af
-    ret                                     ;[cc32] c9
+    ld      a,b                             ;[cc29]
+    ld      ($ffcb),a                       ;[cc2a]
+    ld      a,c                             ;[cc2d]
+    ld      ($ffca),a                       ;[cc2e]
+    xor     a                               ;[cc31]
+    ret                                     ;[cc32]
 
-    ; SUBROUTINE CC33: Never called, at least from this ROM address.
+    ; some display-related routine
+    ; reset display?
     call    $c764                           ;[cc33] display_clear()
     ld      a,$01                           ;[cc36]
     ld      ($ffc8),a                       ;[cc38] var$ffc8 = 1
@@ -2256,9 +2269,10 @@ label_cbf9:
     xor     a                               ;[cc43]
     ret                                     ;[cc44] return 0
 
-    ld      b,$00                           ;[cc45] 06 00
+    ; some display-related routine
+    ld      b,$00                           ;[cc45]
 label_cc47:
-    ld      c,$00                           ;[cc47] 0e 00
+    ld      c,$00                           ;[cc47]
 label_cc49:
     push    bc                              ;[cc49] c5
     call    $cdf4                           ;[cc4a] cd f4 cd
@@ -2325,16 +2339,16 @@ label_cc6b:
     ret                                     ;[ccaa] c9
 
 label_ccab:
-    ld      a,($ffcb)                       ;[ccab] 3a cb ff
-    ld      b,a                             ;[ccae] 47
-    ld      d,a                             ;[ccaf] 57
-    ld      a,($ffca)                       ;[ccb0] 3a ca ff
-    ld      c,a                             ;[ccb3] 4f
-    ld      a,($ffcf)                       ;[ccb4] 3a cf ff
-    ld      e,a                             ;[ccb7] 5f
-    call    $c805                           ;[ccb8] cd 05 c8
-    xor     a                               ;[ccbb] af
-    ret                                     ;[ccbc] c9
+    ld      a,($ffcb)                       ;[ccab]
+    ld      b,a                             ;[ccae]
+    ld      d,a                             ;[ccaf]
+    ld      a,($ffca)                       ;[ccb0]
+    ld      c,a                             ;[ccb3]
+    ld      a,($ffcf)                       ;[ccb4]
+    ld      e,a                             ;[ccb7]
+    call    $c805                           ;[ccb8]
+    xor     a                               ;[ccbb]
+    ret                                     ;[ccbc]
 
 label_ccbd:
     ld      a,($ffce)                       ;[ccbd] 3a ce ff
@@ -2356,17 +2370,17 @@ label_ccbd:
     ret                                     ;[ccde] c9
 
 label_ccdf:
-    ld      a,($ffcb)                       ;[ccdf] 3a cb ff
-    ld      b,a                             ;[cce2] 47
-    ld      a,($ffca)                       ;[cce3] 3a ca ff
-    ld      c,a                             ;[cce6] 4f
+    ld      a,($ffcb)                       ;[ccdf]
+    ld      b,a                             ;[cce2]
+    ld      a,($ffca)                       ;[cce3]
+    ld      c,a                             ;[cce6]
     ld      a,($ffcd)                       ;[cce7] read "number of rows" of display
-    ld      d,a                             ;[ccea] 57
-    ld      a,($ffcf)                       ;[cceb] 3a cf ff
-    ld      e,a                             ;[ccee] 5f
-    call    $c805                           ;[ccef] cd 05 c8
-    xor     a                               ;[ccf2] af
-    ret                                     ;[ccf3] c9
+    ld      d,a                             ;[ccea]
+    ld      a,($ffcf)                       ;[cceb]
+    ld      e,a                             ;[ccee]
+    call    $c805                           ;[ccef]
+    xor     a                               ;[ccf2]
+    ret                                     ;[ccf3]
 
 label_ccf4:
     ld      a,($ffce)                       ;[ccf4] 3a ce ff
