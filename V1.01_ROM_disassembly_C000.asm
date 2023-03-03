@@ -1219,7 +1219,7 @@ label_c6a3:
     inc     hl                              ;[c6c4]
     ld      (hl),a                          ;[c6c5] *$ffd2 = 0
     inc     hl                              ;[c6c6]
-    ld      (hl),$80                        ;[c6c7] *$ffd3 = 0
+    ld      (hl),$80                        ;[c6c7] *$ffd3 = 0 (memory backup of CRTC register 0x0A)
     inc     hl                              ;[c6c9]
     ld      a,($c86f)                       ;[c6ca] a <- cursor data raster from crtc_cfg, "$0d"
     ld      d,a                             ;[c6cd] d <- a
@@ -1723,25 +1723,31 @@ label_c8ea:
     ld      ($ffd9),a                       ;[c912] store A in "blues"
     ret                                     ;[c915]
 
-    ld      a,b                             ;[c916] 78
-    out     ($a0),a                         ;[c917] d3 a0
-    ld      a,c                             ;[c919] 79
-    out     ($a1),a                         ;[c91a] d3 a1
-    ret                                     ;[c91c] c9
+    ; SUBROUTINE C916: crtc_write_register()
+    ; Input:
+    ;   B = CRTC internal register address
+    ;   C = content
+    ld      a,b                             ;[c916]
+    out     ($a0),a                         ;[c917]
+    ld      a,c                             ;[c919]
+    out     ($a1),a                         ;[c91a]
+    ret                                     ;[c91c]
 
-    call    $c6f1                           ;[c91d] display_add_row_column()
-    push    hl                              ;[c920] e5
-    ld      b,d                             ;[c921] 42
-    ld      c,e                             ;[c922] 4b
-    call    $c6f1                           ;[c923] display_add_row_column()
-    pop     de                              ;[c926] d1
-    push    de                              ;[c927] d5
-    or      a                               ;[c928] b7
-    sbc     hl,de                           ;[c929] ed 52
-    inc     hl                              ;[c92b] 23
-    ex      de,hl                           ;[c92c] eb
-    pop     hl                              ;[c92d] e1
-    ld      b,a                             ;[c92e] 47
+    ; SUBROUTINE C91D: display_mangle_some_banked_memory()
+    ; Mangle some video memory
+    call    $c6f1                           ;[c91d] display_add_row_column(row = cyan[0], column = cyan[1]) (preserve A)
+    push    hl                              ;[c920] remember result for later
+    ld      b,d                             ;[c921]
+    ld      c,e                             ;[c922]
+    call    $c6f1                           ;[c923] display_add_row_column(row = cyan[2], column = E) (preserve A)
+    pop     de                              ;[c926] restore result of first call in DE,
+    push    de                              ;[c927]     ... and also remember for later
+    or      a                               ;[c928] clear carry flag
+    sbc     hl,de                           ;[c929] compute difference (second call) - (first call)
+    inc     hl                              ;[c92b] but add +1
+    ex      de,hl                           ;[c92c] DE = difference
+    pop     hl                              ;[c92d] restore result of first call in HL
+    ld      b,a                             ;[c92e] B = A (the same from caller, is always preserved)
     call    $c795                           ;[c92f] bank7_in()
 label_c932:
     call    $c715                           ;[c932] display_cursor_to_video_mem_ptr()
@@ -1756,57 +1762,75 @@ label_c932:
     call    $c79e                           ;[c93e] bank7_out()
     ret                                     ;[c941] c9
 
-    ld      a,c                             ;[c942] 79
-    cp      $44                             ;[c943] fe 44
-    jr      nz,label_c94b                   ;[c945] 20 04
-    ld      c,$40                           ;[c947] 0e 40
-    jr      label_c984                      ;[c949] 18 39
+    ld      a,d                             ;[c93a]
+    or      e                               ;[c93b]
+    jr      nz,label_c932                   ;[c93c] } while (DE != 0);
+
+    call    $c79e                           ;[c93e] bank7_out()
+    ret                                     ;[c941]
+
+    ; SUBROUTINE C942: crtc_cursor_start_raster()
+    ; Changes cursor raster settings (blinking, period, ...)
+    ; if (C == $44), command = $40, else...
+    ld      a,c                             ;[c942]
+    cp      $44                             ;[c943]
+    jr      nz,label_c94b                   ;[c945]
+    ld      c,$40                           ;[c947] (cursor blink "on", speed "slow")
+    jr      label_c984                      ;[c949] execute
+    ; ... else if (C == $45), command = $60, else...
 label_c94b:
-    cp      $45                             ;[c94b] fe 45
-    jr      nz,label_c953                   ;[c94d] 20 04
-    ld      c,$60                           ;[c94f] 0e 60
-    jr      label_c984                      ;[c951] 18 31
+    cp      $45                             ;[c94b]
+    jr      nz,label_c953                   ;[c94d]
+    ld      c,$60                           ;[c94f] (cursor blink "on", speed "fast")
+    jr      label_c984                      ;[c951] execute
+    ; ... else if (C == $46), command = $20, else ...
 label_c953:
-    cp      $46                             ;[c953] fe 46
-    jr      nz,label_c95b                   ;[c955] 20 04
-    ld      c,$20                           ;[c957] 0e 20
-    jr      label_c984                      ;[c959] 18 29
+    cp      $46                             ;[c953]
+    jr      nz,label_c95b                   ;[c955]
+    ld      c,$20                           ;[c957] (cursor blink "off", "speed" "fast")
+    jr      label_c984                      ;[c959] execute
+    ; ... else, ??? restore default settings based on IO port read ???
 label_c95b:
-    ld      a,($c86f)                       ;[c95b] 3a 6f c8
-    ld      d,a                             ;[c95e] 57
-    in      a,($d6)                         ;[c95f] db d6
-    bit     5,a                             ;[c961] cb 6f
-    jr      z,label_c967                    ;[c963] 28 02
-    ld      d,$03                           ;[c965] 16 03
+    ld      a,($c86f)                       ;[c95b] load default CRTC R10 configuration
+    ld      d,a                             ;[c95e]
+    in      a,($d6)                         ;[c95f]
+    bit     5,a                             ;[c961]
+    jr      z,label_c967                    ;[c963]
+    ld      d,$03                           ;[c965]
 label_c967:
-    bit     6,a                             ;[c967] cb 77
-    jr      z,label_c96f                    ;[c969] 28 04
-    set     5,d                             ;[c96b] cb ea
-    set     6,d                             ;[c96d] cb f2
+    bit     6,a                             ;[c967]
+    jr      z,label_c96f                    ;[c969]
+    set     5,d                             ;[c96b]
+    set     6,d                             ;[c96d]
 label_c96f:
-    ld      a,d                             ;[c96f] 7a
-    ld      ($ffd3),a                       ;[c970] 32 d3 ff
-    ld      b,$0a                           ;[c973] 06 0a
-    ld      c,a                             ;[c975] 4f
-    call    $c916                           ;[c976] cd 16 c9
-    ld      a,($c870)                       ;[c979] 3a 70 c8
-    ld      c,a                             ;[c97c] 4f
-    ld      b,$0b                           ;[c97d] 06 0b
-    call    $c916                           ;[c97f] cd 16 c9
-    xor     a                               ;[c982] af
-    ret                                     ;[c983] c9
+    ld      a,d                             ;[c96f]
+    ld      ($ffd3),a                       ;[c970]
+    ld      b,$0a                           ;[c973]
+    ld      c,a                             ;[c975]
+    call    $c916                           ;[c976] crtc_write_register()
+    ld      a,($c870)                       ;[c979]
+    ld      c,a                             ;[c97c]
+    ld      b,$0b                           ;[c97d]
+    call    $c916                           ;[c97f] crtc_write_register()
+    xor     a                               ;[c982]
+    ret                                     ;[c983]
 
+    ; execute command
 label_c984:
-    ld      a,($ffd3)                       ;[c984] 3a d3 ff
-    and     $9f                             ;[c987] e6 9f
-    or      c                               ;[c989] b1
-    ld      ($ffd3),a                       ;[c98a] 32 d3 ff
-    ld      c,a                             ;[c98d] 4f
-    ld      b,$0a                           ;[c98e] 06 0a
-    call    $c916                           ;[c990] cd 16 c9
-    xor     a                               ;[c993] af
-    ret                                     ;[c994] c9
+    ; set bit [5:6] of $ffd3, accordingly to passed C command
+    ld      a,($ffd3)                       ;[c984]
+    and     $9f                             ;[c987]
+    or      c                               ;[c989]
+    ld      ($ffd3),a                       ;[c98a]
 
+    ; set cursor blink and cycle parameters
+    ld      c,a                             ;[c98d]
+    ld      b,$0a                           ;[c98e]
+    call    $c916                           ;[c990] crtc_write_register()
+    xor     a                               ;[c993] return 0
+    ret                                     ;[c994]
+
+    ; SUBROUTINE C995
     ; set magenta:0
     ld      hl,$ffd1                        ;[c995]
     set     0,(hl)                          ;[c998]
