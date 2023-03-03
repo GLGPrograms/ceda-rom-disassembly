@@ -1,5 +1,10 @@
 # Variables
 
+# Constants
+| address | size | value | description                    |
+| ------- | ---- | ----- | ------------------------------ |
+| c86f    | 1    | $0d   | CRTC R10 default configuration |
+
 # Default bank
 
 | address | size | name           | bits  | description                                                                                                     |
@@ -17,21 +22,22 @@
 | ....    |      |                |       |                                                                                                                 |
 | ffc7    | 1    |                |       | display-related stuff                                                                                           |
 | ffc8    | 1    |                |       | display-related stuff                                                                                           |
-| ffc9    |      |                |       |                                                                                                                 |
+| ffc9    | 1    |                |       | display-related stuff                                                                                           |
 | ffca    |      |                |       |                                                                                                                 |
 | ffcb    |      |                |       |                                                                                                                 |
 | ffcc    |      |                |       |                                                                                                                 |
 | ffcd    | 1    | number of rows |       | contains configured number of displayed rows (default: 24)                                                      |
 | ffce    | 1    | column         |       |                                                                                                                 |
 | ffcf    | 1    |                |       | set to 0, then never changed?                                                                                   |
-| ffd0    |      |                |       |                                                                                                                 |
-| ffd1    |      | magenta        | [3,4] | looks like an important bitmap; bit 3 is checked a lot of time; nothing to do with colors, just a mnemonic name |
+| ffd0    | 1    |                |       |                                                                                                                 |
+| ffd1    |      | _magenta_      | [3,4] | looks like an important bitmap; bit 3 is checked a lot of time; nothing to do with colors, just a mnemonic name |
 | ffd2    |      |                |       |                                                                                                                 |
-| ffd3    |      |                |       |                                                                                                                 |
+| ffd3    | 1    | crtc_r10_mem   | [5:6] | memory backup of CRTC R10 content                                                                               |
 | ffd4    | 2    | IX             | -     | text cursor X position (?)                                                                                      |
 | ffd6    | 2    | IY             | -     | linearized text cursor position                                                                                 |
 | ffd7    |      |                |       |                                                                                                                 |
-| ffd8    | 1    | escape status  | ?     | remember current escaping status during a putchar() Values: $00 = no ongoing escaping, $01 = ongoing escape     |
-| ffd9    |      |                |       |                                                                                                                 |
-| ffda    |      |                |       |                                                                                                                 |
+| ffd8    | 1    | escaped char   | ?     | remember current escaping char during a putchar()                                                               |
+|         |      | "              |       | Values: $00 = no ongoing escaping, $01 = ongoing escape, any other: current char to be escaped?                 |
+| ffd9    | 1    | _blues_        |       | index of array at $ffda ?                                                                                       |
+| ffda    | 3(+) | _cyan_         |       |                                                                                                                 |
 | ....    |      |                |       |                                                                                                                 |
