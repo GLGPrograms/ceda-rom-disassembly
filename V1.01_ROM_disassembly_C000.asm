@@ -1903,13 +1903,13 @@ label_c9eb:
     ; Second stage escape address table
     WORD $cd42  ; use 25 rows
     WORD $cd46  ; use 24 rows
-    WORD $ca7a
-    WORD $ca7a
-    WORD $ca7a
+    WORD $ca7a  ; do nothing
+    WORD $ca7a  ; do nothing
+    WORD $ca7a  ; do nothing
     WORD $ca7c
     WORD $c9bf
     WORD $cc7f
-    WORD $ca7a
+    WORD $ca7a  ; do nothing
     WORD $cad4
     WORD $caf2
     WORD $cb1c
@@ -1919,7 +1919,7 @@ label_c9eb:
     WORD $ca7c
     WORD $c875
     WORD $c8ac
-    WORD $ca7a
+    WORD $ca7a  ; do nothing
     WORD $c942
     WORD $c942
     WORD $c942
@@ -1931,10 +1931,10 @@ label_c9eb:
     WORD $c9b1
     WORD $c9b8
     WORD $cc45
-    WORD $ca7a
+    WORD $ca7a  ; do nothing
     WORD $ccab
     WORD $ccdf
-    WORD $ca7a
+    WORD $ca7a  ; do nothing
     WORD $cbda
     WORD $cc04
     WORD $cc1b
