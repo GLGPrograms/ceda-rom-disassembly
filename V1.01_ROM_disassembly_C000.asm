@@ -1862,21 +1862,30 @@ label_c9e3:
     jr      nz,label_c9eb                   ;[c9e8]
     ld      a,c                             ;[c9ea]
 label_c9eb:
-    ld      ($ffd8),a                       ;[c9eb]
+    ld      ($ffd8),a                       ;[c9eb] check "ongoing escape"
+
+    ; if ("ongoing escape" < $31 || "ongoing escape" >= $60), then
+    ;   terminate escaping
     cp      $60                             ;[c9ee]
-    jp      nc,$ca70                        ;[c9f0] jump if A >= $60
+    jp      nc,label_ca70                   ;[c9f0] jump if A >= $60
     sub     $31                             ;[c9f3]
-    jp      c,$ca70                         ;[c9f5] jump if A < $31
-    call    $ca05                           ;[c9f8] call if $31 <= A < $60
+    jp      c,label_ca70                    ;[c9f5] jump if A < $31
+
+    ; ... else, if $31 <= "ongoing escape" < $60,
+    ;       "ongoing escape" -= $31 (from above),
+    ;       and finally perform escape
+    ; The value is clamped in this range because it will be used to index a jump table.
+    call    $ca05                           ;[c9f8]
     or      a                               ;[c9fb]
-    jr      z,label_ca70                    ;[c9fc]
-    jp      $c6a3                           ;[c9fe] save_index_restore_registers_and_ret()
+    jr      z,label_ca70                    ;[c9fc] if (A == 0), terminate escape sequence, else...
+    jp      $c6a3                           ;[c9fe] ... save_index_restore_registers_and_ret(), and continue escaping next time
 
     ; SUBROUTINE:
     ld      hl,($bffa)                      ;[ca01] 2a fa bf
     jp      (hl)                            ;[ca04] e9
 
-    ; extract an address from the following address table, and jump there
+    ; Perform escape.
+    ; Extract an address from the following address table, and jump there
     ;   first compute index based on A
     add     a                               ;[ca05]
     ld      hl,$ca12                        ;[ca06]
@@ -1940,10 +1949,13 @@ label_c9eb:
     WORD $cc95
     WORD $cd27
 
+    ; Terminate escape.
+    ; This routine resets the "ongoing escape" status,
+    ; then restores user's registers and returns.
 label_ca70:
     xor     a                               ;[ca70]
     ld      ($ffd8),a                       ;[ca71] set "no ongoing escaping"
-    ld      ($ffd9),a                       ;[ca74]
+    ld      ($ffd9),a                       ;[ca74] ???
     jp      $c6a3                           ;[ca77] save_index_restore_registers_and_ret()
 
     ; SUBMONSTER CA7A: return 0.
