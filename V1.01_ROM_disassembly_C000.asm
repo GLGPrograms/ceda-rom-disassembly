@@ -914,14 +914,14 @@ label_c4be:
     jp      label_c6a3                      ;[c4dd] putchar epilogue: save_index_restore_registers_and_ret()
 
 label_c4e0:
-    ld      a,($ffcb)                       ;[c4e0] load current cursor posy?
+    ld      a,($ffcb)                       ;[c4e0] load "current_row"
     ld      b,a                             ;[c4e3]
     ld      a,($ffcd)                       ;[c4e4] read "number of rows" of display
     cp      b                               ;[c4e7]
     jr      z,label_c501                    ;[c4e8] jump if posy reached last row
     inc     b                               ;[c4ea] increment cursor posy?
     ld      a,b                             ;[c4eb]
-    ld      ($ffcb),a                       ;[c4ec] save current cursor posy
+    ld      ($ffcb),a                       ;[c4ec] save "current_row"
     ld      a,($ffc9)                       ;[c4ef]
     or      a                               ;[c4f2]
     jr      nz,label_c4fb                   ;[c4f3] jump if *$ffc9 != 0
@@ -951,28 +951,32 @@ label_c510:
     call    $c71c                           ;[c51b] crtc_update_cursor_position()
     call    $c62e                           ;[c51e]
     jp      label_c6a3                      ;[c521] save_index_restore_registers_and_ret()
+
+    ; print CR ($0d) Carriage Return
 label_c524:
     ld      a,($ffd0)                       ;[c524]
-    ld      ($ffca),a                       ;[c527]
-    ld      c,a                             ;[c52a]
+    ld      ($ffca),a                       ;[c527] copy content $FFCA = $FFD0
+    ld      c,a                             ;[c52a] C = var$FFD0
     ld      a,($ffcb)                       ;[c52b]
-    ld      b,a                             ;[c52e]
+    ld      b,a                             ;[c52e] B = "current_row"
     jp      label_c5e5                      ;[c52f]
+    ; print LF ($0d) Line Feed
 label_c532:
     ld      a,($ffcb)                       ;[c532]
-    ld      b,a                             ;[c535]
+    ld      b,a                             ;[c535] B = "current_row"
     ld      a,($ffcd)                       ;[c536] read "number of rows" of display
     cp      b                               ;[c539]
-    jr      z,label_c54b                    ;[c53a]
+    jr      z,label_c54b                    ;[c53a] if "current_row" != "number of rows" {
     inc     b                               ;[c53c]
     ld      a,b                             ;[c53d]
-    ld      ($ffcb),a                       ;[c53e]
+    ld      ($ffcb),a                       ;[c53e]     "current_row" ++
 label_c541:
     push    iy                              ;[c541]
     pop     hl                              ;[c543]
     ld      de,$0050                        ;[c544]
-    add     hl,de                           ;[c547]
-    jp      label_c5e8                      ;[c548]
+    add     hl,de                           ;[c547]     IY += 80 (next row, in linear position)
+    jp      label_c5e8                      ;[c548]     always the same save, cleanup and return stuff
+                                            ;       }
 label_c54b:
     call    $c62e                           ;[c54b]
     ld      a,($ffcb)                       ;[c54e]
@@ -1067,7 +1071,7 @@ label_c5db:
 label_c5e5:
     call    $c6f1                           ;[c5e5] display_add_row_column()
 label_c5e8:
-    call    $c71c                           ;[c5e8] crtc_update_cursor_position()
+    call    crtc_update_cursor_position     ;[c5e8] crtc_update_cursor_position()
     jp      label_c6a3                      ;[c5eb] save_index_restore_registers_and_ret()
 label_c5ee:
     call    $c764                           ;[c5ee] display_clear()
@@ -1205,7 +1209,7 @@ label_c6a3:
     inc     hl                              ;[c6b4]
     ld      (hl),a                          ;[c6b5] *$ffca = 0
     inc     hl                              ;[c6b6]
-    ld      (hl),a                          ;[c6b7] *$ffcb = 0
+    ld      (hl),a                          ;[c6b7] *$ffcb = 0 ("current_row")
     inc     hl                              ;[c6b8]
     ld      (hl),a                          ;[c6b9] *$ffcc = 0
     inc     hl                              ;[c6ba]
@@ -1303,10 +1307,10 @@ label_c701:
 
     ; SUBROUTINE 0xC715; display_cursor_to_video_mem_ptr()
     ; Compute current video memory pointer from current cursor
-    ; arguments:
-    ; - hl: cursor position
-    ; return:
-    ; - hl: video memory pointer
+    ; Input:
+    ; - HL: cursor position
+    ; Return:
+    ; - HL: video memory pointer
     ; Memento: video memory is mapped to 0xd000:0xd7ff
     ld      a,h                             ;[c715]
     and     $07                             ;[c716] hl &= 0x07ff (clamp to max video memory address)
@@ -1317,29 +1321,32 @@ label_c701:
     ; SUBROUTINE C71C; crtc_update_cursor_position(HL: value, IX)
     ; Write cursor position into CRTC hardware registers.
     ; (CRTC can display cursor in using hardware acceleration)
+    ; Cursor position is specified as if the video matrix has been linearized.
+    ; Example: row 7, column 4 => position = (7 * 80) + 4 = $234 => CRTC R14 = $02, CRTC R15 = $34
     ; Input:
-    ;   - HL
+    ;   - HL: l_cur_pos: linearized position of CRTC cursor
     ;   - IX
     ; Output:
     ;   - IY
 crtc_update_cursor_position:
     ld      a,h                             ;[c71c]
     and     $07                             ;[c71d]
-    ld      h,a                             ;[c71f] value &= 0x07FF (clamp to range [0;2048[ )
-                                            ;       video memory is 1920 bytes long (80x24)
+    ld      h,a                             ;[c71f] l_cur_pos &= 0x07FF (clamp to range [0;2048[ )
+                                            ;       video memory is 2000 bytes long (80x25)
                                             ;       video memory page is 2048 bytes long (2k)
     push    ix                              ;[c720]
     pop     de                              ;[c722]
-    ex      de,hl                           ;[c723] HL = IX; DE = value
+    ex      de,hl                           ;[c723] HL = IX; DE = l_cur_pos
     or      a                               ;[c724] clear carry
-    sbc     hl,de                           ;[c725] HL = IX - value
+    sbc     hl,de                           ;[c725] HL = IX - l_cur_pos
     jr      c,label_c730                    ;[c727]
-    jr      z,label_c730                    ;[c729] if IX > value
+    jr      z,label_c730                    ;[c729] if (IX > l_cur_pos) {
     ld      hl,$0800                        ;[c72b]     HL = $0800
     add     hl,de                           ;[c72e]
-    ex      de,hl                           ;[c72f]     DE = value + $0800
+    ex      de,hl                           ;[c72f]     DE = l_cur_pos + $0800
+                                            ;       }
 label_c730:
-    ; Write cursor position, that is value or ($0800 + value)
+    ; Write cursor position (DE = l_cur_pos)
     ld      a,$0e                           ;[c730] CRTC R14: cursor position HI
     out     ($a0),a                         ;[c732]
     ld      a,d                             ;[c734]
@@ -1351,7 +1358,7 @@ label_c730:
     out     ($a1),a                         ;[c73c]
 
     push    de                              ;[c73e]
-    pop     iy                              ;[c73f] iy <- value or $0800 + value
+    pop     iy                              ;[c73f] iy = l_cur_pos
     ret                                     ;[c741]
 
     ld      a,h                             ;[c742] 7c
@@ -1379,7 +1386,7 @@ label_c75d:
 
     ; SUBROUTINE C764; display_clear()
     ; This routine clears the display (fills it with empty spaces),
-    ; and resets current cursor (row,column) indexes at ($ffcb,$ffca)
+    ; and resets current cursor (row,column) indexes at ($ffcb,$ffca) ("current_row",TODO)
     ; 24 rows x 80 columns
     ; Input:
     ;   IX: cursor pointer
@@ -1411,7 +1418,7 @@ label_c770:
 
     xor     a                               ;[c78d]
     ld      ($ffca),a                       ;[c78e] $ffca = 0 (column)
-    ld      ($ffcb),a                       ;[c791] $ffcb = 0 (row)
+    ld      ($ffcb),a                       ;[c791] "current_row" = 0
     ret                                     ;[c794]
 
     ; SUBROUTINE C795: bank7_in()
@@ -2213,7 +2220,7 @@ label_cb9d:
     ld      a,$4f                           ;[cba6] 3e 4f
     cp      c                               ;[cba8] b9
     jr      c,label_cbb9                    ;[cba9] 38 0e
-    ld      a,($ffcb)                       ;[cbab] 3a cb ff
+    ld      a,($ffcb)                       ;[cbab] write "current_row"
     ld      b,a                             ;[cbae] 47
     ld      a,c                             ;[cbaf] 79
     ld      ($ffca),a                       ;[cbb0] 32 ca ff
@@ -2293,7 +2300,7 @@ label_cbf9:
     call    $c6f1                           ;[cc23] display_add_row_column()
     call    $c71c                           ;[cc26] crtc_update_cursor_position()
     ld      a,b                             ;[cc29]
-    ld      ($ffcb),a                       ;[cc2a]
+    ld      ($ffcb),a                       ;[cc2a] write "current_row"
     ld      a,c                             ;[cc2d]
     ld      ($ffca),a                       ;[cc2e]
     xor     a                               ;[cc31]
@@ -2380,7 +2387,7 @@ label_cc6b:
     ret                                     ;[ccaa] c9
 
 label_ccab:
-    ld      a,($ffcb)                       ;[ccab]
+    ld      a,($ffcb)                       ;[ccab] read "current_row"
     ld      b,a                             ;[ccae]
     ld      d,a                             ;[ccaf]
     ld      a,($ffca)                       ;[ccb0]
@@ -2392,26 +2399,26 @@ label_ccab:
     ret                                     ;[ccbc]
 
 label_ccbd:
-    ld      a,($ffce)                       ;[ccbd] 3a ce ff
-    ld      b,a                             ;[ccc0] 47
-    ld      a,($ffcb)                       ;[ccc1] 3a cb ff
-    ld      ($ffce),a                       ;[ccc4] 32 ce ff
-    ld      a,($ffc9)                       ;[ccc7] 3a c9 ff
-    ld      c,a                             ;[ccca] 4f
+    ld      a,($ffce)                       ;[ccbd]
+    ld      b,a                             ;[ccc0]
+    ld      a,($ffcb)                       ;[ccc1] read "current_row"
+    ld      ($ffce),a                       ;[ccc4]
+    ld      a,($ffc9)                       ;[ccc7]
+    ld      c,a                             ;[ccca]
     ld      a,$01                           ;[cccb]
     ld      ($ffc9),a                       ;[cccd] var$ffc9 = 1
-    push    bc                              ;[ccd0] c5
-    call    $c62e                           ;[ccd1] cd 2e c6
-    pop     bc                              ;[ccd4] c1
-    ld      a,b                             ;[ccd5] 78
-    ld      ($ffce),a                       ;[ccd6] 32 ce ff
-    ld      a,c                             ;[ccd9] 79
-    ld      ($ffc9),a                       ;[ccda] 32 c9 ff
-    xor     a                               ;[ccdd] af
-    ret                                     ;[ccde] c9
+    push    bc                              ;[ccd0]
+    call    $c62e                           ;[ccd1]
+    pop     bc                              ;[ccd4]
+    ld      a,b                             ;[ccd5]
+    ld      ($ffce),a                       ;[ccd6]
+    ld      a,c                             ;[ccd9]
+    ld      ($ffc9),a                       ;[ccda]
+    xor     a                               ;[ccdd]
+    ret                                     ;[ccde]
 
 label_ccdf:
-    ld      a,($ffcb)                       ;[ccdf]
+    ld      a,($ffcb)                       ;[ccdf] read "current_row"
     ld      b,a                             ;[cce2]
     ld      a,($ffca)                       ;[cce3]
     ld      c,a                             ;[cce6]
@@ -2424,20 +2431,20 @@ label_ccdf:
     ret                                     ;[ccf3]
 
 label_ccf4:
-    ld      a,($ffce)                       ;[ccf4] 3a ce ff
-    ld      b,a                             ;[ccf7] 47
-    ld      a,($ffcb)                       ;[ccf8] 3a cb ff
-    ld      c,a                             ;[ccfb] 4f
+    ld      a,($ffce)                       ;[ccf4]
+    ld      b,a                             ;[ccf7]
+    ld      a,($ffcb)                       ;[ccf8] read "current_row"
+    ld      c,a                             ;[ccfb]
     ld      a,($ffcd)                       ;[ccfc] read "number of rows" of display
-    cp      c                               ;[ccff] b9
-    jr      z,label_cd18                    ;[cd00] 28 16
-    ld      a,c                             ;[cd02] 79
-    ld      ($ffce),a                       ;[cd03] 32 ce ff
-    push    bc                              ;[cd06] c5
-    call    $c830                           ;[cd07] cd 30 c8
-    pop     bc                              ;[cd0a] c1
-    ld      a,b                             ;[cd0b] 78
-    ld      ($ffce),a                       ;[cd0c] 32 ce ff
+    cp      c                               ;[ccff]
+    jr      z,label_cd18                    ;[cd00]
+    ld      a,c                             ;[cd02]
+    ld      ($ffce),a                       ;[cd03]
+    push    bc                              ;[cd06]
+    call    $c830                           ;[cd07]
+    pop     bc                              ;[cd0a]
+    ld      a,b                             ;[cd0b]
+    ld      ($ffce),a                       ;[cd0c]
 label_cd0f:
     ld      a,($ffd0)                       ;[cd0f] 3a d0 ff
     ld      c,a                             ;[cd12] 4f
