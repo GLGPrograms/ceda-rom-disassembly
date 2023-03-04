@@ -76,7 +76,7 @@ label_c064:
     ; - if BOOT, execute bios_bootkey
     ; - if F15, execute bios_boot_from_8000
 bios_waitkey:
-    call    kbd_getchar                     ;[c06b] kbd_getchar()
+    jp      custom
     ld      a,b                             ;[c06e]
     cp      $4d                             ;[c06f]
     jr      z,bios_bootkey                  ;[c071] jump if kbd_getchar() == $4D (BOOT key)
@@ -456,7 +456,7 @@ label_c229:
     call    fdc_rw_status_c3f4              ;[c22c] command response, put it in $ffc0-$ffc6
     ld      a,($ffc0)                       ;[c22f] fetch status (ST0)
     and     $c0                             ;[c232] mask Interrupt Code bits (as in fdc_sis routine)...
-    cp      $40                             ;[c234] 
+    cp      $40                             ;[c234]
     jr      nz,label_c248                   ;[c236] ... and return if IC != 01 (!= "readfail")
     call    fdc_err_check_c2a0              ;[c238] after-write error checking (common with "read data")
     ld      a,($ffbf)                       ;[c23b] keep a retry counter to avoid infinite loops
@@ -2615,8 +2615,67 @@ label_cdb5:
     call    $c79e                           ;[ce02] bank7_out()
     ret                                     ;[ce05]
 
-    ; [ce06]
-    REPT 502
+welcome_string:
+    BYTE    "Retrofficina GLG Programs loader - SEND AAAA-LLLL-DATA (LSB 9600 8N1)"
+    BYTE    $00
+custom:
+    ld      hl,welcome_string
+print_welcome:
+    ld      a,(hl)
+    cp      $00
+    jr      z,print_welcome_end
+    ld      c,a
+    call    bios_putchar_c45e
+    inc     hl
+    jp      print_welcome
+print_welcome_end:
+
+    ; Read address in HL
+    call    uart_rx
+    ld      l,a
+    call    uart_rx
+    ld      h,a
+    ; Remember address for later
+    push hl
+
+    ; Read length in DE
+    call    uart_rx
+    ld      e,a
+    call    uart_rx
+    ld      d,a
+
+    ; Read data
+main_loader_loop:
+    call    uart_rx
+    ld      (hl),a
+    inc     hl
+    dec     de
+    ld      a,d
+    or      e
+    jr      nz,main_loader_loop
+
+    ; Execute loaded code
+    ret
+
+hcf:
+    jp      hcf
+
+uart_rx:
+    in      a,($b1)
+    and     $01
+    jr      z,uart_rx
+    in      a,($b0)
+    ret
+
+uart_tx:
+    in      a,($b1)
+    and     $04
+    jr      z,uart_tx
+    ld      a,c
+    out     ($b0),a
+    ret
+
+    REPT $cffc - ASMPC - $c000
     nop
     ENDR
 
