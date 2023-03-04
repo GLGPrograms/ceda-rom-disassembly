@@ -456,7 +456,7 @@ label_c229:
     call    fdc_rw_status_c3f4              ;[c22c] command response, put it in $ffc0-$ffc6
     ld      a,($ffc0)                       ;[c22f] fetch status (ST0)
     and     $c0                             ;[c232] mask Interrupt Code bits (as in fdc_sis routine)...
-    cp      $40                             ;[c234] 
+    cp      $40                             ;[c234]
     jr      nz,label_c248                   ;[c236] ... and return if IC != 01 (!= "readfail")
     call    fdc_err_check_c2a0              ;[c238] after-write error checking (common with "read data")
     ld      a,($ffbf)                       ;[c23b] keep a retry counter to avoid infinite loops
@@ -960,6 +960,7 @@ label_c524:
     ld      a,($ffcb)                       ;[c52b]
     ld      b,a                             ;[c52e] B = "current_row"
     jp      label_c5e5                      ;[c52f]
+
     ; print LF ($0d) Line Feed
 label_c532:
     ld      a,($ffcb)                       ;[c532]
@@ -979,23 +980,25 @@ label_c541:
                                             ;       }
 label_c54b:
     call    $c62e                           ;[c54b]
-    ld      a,($ffcb)                       ;[c54e]
+    ld      a,($ffcb)                       ;[c54e] read "current_row"
     ld      b,a                             ;[c551]
-    ld      a,($ffca)                       ;[c552]
+    ld      a,($ffca)                       ;[c552] read "current_column"
     ld      c,a                             ;[c555]
     jr      label_c541                      ;[c556]
+
+    ; print TAB ($09)
 label_c558:
-    ld      a,($ffcb)                       ;[c558]
+    ld      a,($ffcb)                       ;[c558] read "current_row"
     ld      b,a                             ;[c55b]
-    ld      a,($ffce)                       ;[c55c]
+    ld      a,($ffce)                       ;[c55c] read current column? what
     cp      b                               ;[c55f] if A == B
     jp      z,label_c6a3                    ;[c560]     save_index_restore_registers_and_ret()
     dec     b                               ;[c563]
     ld      a,b                             ;[c564]
-    ld      ($ffcb),a                       ;[c565]
-    ld      a,($ffca)                       ;[c568]
+    ld      ($ffcb),a                       ;[c565] "current_row" --
+    ld      a,($ffca)                       ;[c568] read "current_column"
     ld      c,a                             ;[c56b]
-    jp      label_c5e5                      ;[c56c]
+    jp      label_c5e5                      ;[c56c] goto and call display_add_row_column()
 label_c56f:
     call    $c5f8                           ;[c56f]
     ld      a,($ffcb)                       ;[c572]
@@ -1004,7 +1007,7 @@ label_c56f:
     jp      label_c5e5                      ;[c578]
 label_c57b:
     ld      a,($ffd0)                       ;[c57b]
-    ld      ($ffca),a                       ;[c57e]
+    ld      ($ffca),a                       ;[c57e] store "current_column"
     ld      c,a                             ;[c581]
     ld      a,($ffcb)                       ;[c582]
     ld      b,a                             ;[c585]
@@ -1021,7 +1024,7 @@ label_c594:
     pop     bc                              ;[c598]
     jr      label_c5e5                      ;[c599]
 label_c59b:
-    ld      a,($ffca)                       ;[c59b]
+    ld      a,($ffca)                       ;[c59b] read "current_column"
     ld      c,a                             ;[c59e]
     ld      a,($ffd0)                       ;[c59f]
     cp      c                               ;[c5a2]
@@ -1036,8 +1039,8 @@ label_c59b:
     dec     c                               ;[c5ad]
 label_c5ae:
     ld      a,c                             ;[c5ae]
-    ld      ($ffca),a                       ;[c5af]
-    ld      a,($ffcb)                       ;[c5b2]
+    ld      ($ffca),a                       ;[c5af] store "current_column"
+    ld      a,($ffcb)                       ;[c5b2] load "current_row"
     ld      b,a                             ;[c5b5]
     jr      label_c5e5                      ;[c5b6]
 label_c5b8:
@@ -1052,7 +1055,7 @@ label_c5b8:
     dec     b                               ;[c5c3]
 label_c5c4:
     ld      a,b                             ;[c5c4]
-    ld      ($ffca),a                       ;[c5c5]
+    ld      ($ffca),a                       ;[c5c5] store "current_column"
     ld      c,a                             ;[c5c8]
     ld      a,($ffcb)                       ;[c5c9]
     ld      b,a                             ;[c5cc]
@@ -1065,9 +1068,9 @@ label_c5c4:
     jr      label_c5e5                      ;[c5d9]
 label_c5db:
     xor     a                               ;[c5db]
-    ld      ($ffcb),a                       ;[c5dc]
-    ld      ($ffca),a                       ;[c5df]
-    ld      bc,$0000                        ;[c5e2]
+    ld      ($ffcb),a                       ;[c5dc] "current_row" = 0
+    ld      ($ffca),a                       ;[c5df] "current_column" = 0
+    ld      bc,$0000                        ;[c5e2] prepare parameters for next function call
 label_c5e5:
     call    $c6f1                           ;[c5e5] display_add_row_column()
 label_c5e8:
@@ -1101,7 +1104,7 @@ label_c605:
     jr      nc,label_c60f                   ;[c60a] if posx > *$ffcf...
     ld      a,($ffd0)                       ;[c60c] put posx to "column 0"
 label_c60f:
-    ld      ($ffca),a                       ;[c60f] save new posx
+    ld      ($ffca),a                       ;[c60f] store "current_column"
     ret                                     ;[c612]
 
     ; SUBROUTINE $C613
@@ -1207,7 +1210,7 @@ label_c6a3:
     xor     a                               ;[c6b2]
     ld      (hl),a                          ;[c6b3] *$ffc9 = 0
     inc     hl                              ;[c6b4]
-    ld      (hl),a                          ;[c6b5] *$ffca = 0
+    ld      (hl),a                          ;[c6b5] *$ffca = 0 ("current_column")
     inc     hl                              ;[c6b6]
     ld      (hl),a                          ;[c6b7] *$ffcb = 0 ("current_row")
     inc     hl                              ;[c6b8]
@@ -1386,7 +1389,7 @@ label_c75d:
 
     ; SUBROUTINE C764; display_clear()
     ; This routine clears the display (fills it with empty spaces),
-    ; and resets current cursor (row,column) indexes at ($ffcb,$ffca) ("current_row",TODO)
+    ; and resets current cursor (row,column) indexes at ($ffcb,$ffca) ("current_row","current_column")
     ; 24 rows x 80 columns
     ; Input:
     ;   IX: cursor pointer
@@ -1417,7 +1420,7 @@ label_c770:
     call    $c71c                           ;[c78a] crtc_update_cursor_position()
 
     xor     a                               ;[c78d]
-    ld      ($ffca),a                       ;[c78e] $ffca = 0 (column)
+    ld      ($ffca),a                       ;[c78e] "current_column" = 0
     ld      ($ffcb),a                       ;[c791] "current_row" = 0
     ret                                     ;[c794]
 
@@ -1612,14 +1615,14 @@ crtc_cfg_base:
     set     3,a                             ;[c878]
     ld      ($ffd1),a                       ;[c87a]
 
-    ld      a,($ffca)                       ;[c87d] 3a ca ff
-    ld      c,a                             ;[c880] 4f
-    rra                                     ;[c881] 1f
-    jr      nc,label_c88b                   ;[c882] 30 07
-    inc     iy                              ;[c884] fd 23
-    inc     c                               ;[c886] 0c
-    ld      a,c                             ;[c887] 79
-    ld      ($ffca),a                       ;[c888] 32 ca ff
+    ld      a,($ffca)                       ;[c87d] read "current_column"
+    ld      c,a                             ;[c880]
+    rra                                     ;[c881]
+    jr      nc,label_c88b                   ;[c882]
+    inc     iy                              ;[c884]
+    inc     c                               ;[c886]
+    ld      a,c                             ;[c887]
+    ld      ($ffca),a                       ;[c888] store "current_column"
 label_c88b:
     xor     a                               ;[c88b] af
     ret                                     ;[c88c] c9
@@ -2214,16 +2217,16 @@ label_cb9d:
     ret                                     ;[cb9e]
 
     call    $cdd7                           ;[cb9f] increment_blues_if_zero() ; if (blues == 0), return to $C9FB
-    ld      a,c                             ;[cba2] 79
-    sub     $20                             ;[cba3] d6 20
-    ld      c,a                             ;[cba5] 4f
-    ld      a,$4f                           ;[cba6] 3e 4f
-    cp      c                               ;[cba8] b9
-    jr      c,label_cbb9                    ;[cba9] 38 0e
+    ld      a,c                             ;[cba2]
+    sub     $20                             ;[cba3]
+    ld      c,a                             ;[cba5]
+    ld      a,$4f                           ;[cba6]
+    cp      c                               ;[cba8]
+    jr      c,label_cbb9                    ;[cba9]
     ld      a,($ffcb)                       ;[cbab] write "current_row"
-    ld      b,a                             ;[cbae] 47
-    ld      a,c                             ;[cbaf] 79
-    ld      ($ffca),a                       ;[cbb0] 32 ca ff
+    ld      b,a                             ;[cbae]
+    ld      a,c                             ;[cbaf]
+    ld      ($ffca),a                       ;[cbb0] load "current_column"
     call    $c6f1                           ;[cbb3] display_add_row_column()
     call    $c71c                           ;[cbb6] crtc_update_cursor_position()
 label_cbb9:
@@ -2302,7 +2305,7 @@ label_cbf9:
     ld      a,b                             ;[cc29]
     ld      ($ffcb),a                       ;[cc2a] write "current_row"
     ld      a,c                             ;[cc2d]
-    ld      ($ffca),a                       ;[cc2e]
+    ld      ($ffca),a                       ;[cc2e] write "current_column"
     xor     a                               ;[cc31]
     ret                                     ;[cc32]
 
@@ -2390,7 +2393,7 @@ label_ccab:
     ld      a,($ffcb)                       ;[ccab] read "current_row"
     ld      b,a                             ;[ccae]
     ld      d,a                             ;[ccaf]
-    ld      a,($ffca)                       ;[ccb0]
+    ld      a,($ffca)                       ;[ccb0] read "current_column"
     ld      c,a                             ;[ccb3]
     ld      a,($ffcf)                       ;[ccb4]
     ld      e,a                             ;[ccb7]
@@ -2420,7 +2423,7 @@ label_ccbd:
 label_ccdf:
     ld      a,($ffcb)                       ;[ccdf] read "current_row"
     ld      b,a                             ;[cce2]
-    ld      a,($ffca)                       ;[cce3]
+    ld      a,($ffca)                       ;[cce3] read "current_column"
     ld      c,a                             ;[cce6]
     ld      a,($ffcd)                       ;[cce7] read "number of rows" of display
     ld      d,a                             ;[ccea]
