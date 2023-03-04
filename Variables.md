@@ -36,7 +36,7 @@
 | ffd4    | 2    | IX             | -     | text cursor X position (?)                                                                                      |
 | ffd6    | 2    | IY             | -     | linearized text cursor position                                                                                 |
 | ffd7    |      |                |       |                                                                                                                 |
-| ffd8    | 1    | escaped char   | ?     | remember current escaping char during a putchar()                                                               |
+| ffd8    | 1    | escaped_char   | ?     | remember current escaping char during a putchar()                                                               |
 |         |      | "              |       | Values: $00 = no ongoing escaping, $01 = ongoing escape, any other: current char to be escaped?                 |
 | ffd9    | 1    | _blues_        |       | index of array at $ffda ?                                                                                       |
 | ffda    | 3(+) | _cyan_         |       |                                                                                                                 |

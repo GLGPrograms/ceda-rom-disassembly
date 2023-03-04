@@ -891,7 +891,7 @@ bios_putchar_c45e:
     ; Handle escape (first stage): remember that a character is being escaped, for next putchar()
 label_c4b6:
     ld      a,$01                           ;[c4b6]
-    ld      ($ffd8),a                       ;[c4b8]
+    ld      ($ffd8),a                       ;[c4b8] "ecaped_char" = 1
     jp      label_c6a3                      ;[c4bb] save_index_restore_registers_and_ret()
 
     ; Handle all, but special characters
