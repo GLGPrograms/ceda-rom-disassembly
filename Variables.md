@@ -23,13 +23,13 @@
 | ffc7    | 1    |                |       | display-related stuff                                                                                           |
 | ffc8    | 1    |                |       | display-related stuff                                                                                           |
 | ffc9    | 1    |                |       | display-related stuff                                                                                           |
-| ffca    |      |                |       |                                                                                                                 |
-| ffcb    |      |                |       |                                                                                                                 |
+| ffca    | 1    |                |       |                                                                                                                 |
+| ffcb    | 1    | current_row    |       | display row where the cursor is positioned                                                                      |
 | ffcc    |      |                |       |                                                                                                                 |
 | ffcd    | 1    | number of rows |       | contains configured number of displayed rows (default: 24)                                                      |
 | ffce    | 1    | column         |       |                                                                                                                 |
 | ffcf    | 1    |                |       | set to 0, then never changed?                                                                                   |
-| ffd0    | 1    |                |       |                                                                                                                 |
+| ffd0    | 1    |                |       | something which has to do with display columns (see $ffcb too)                                                  |
 | ffd1    |      | _magenta_      | [3,4] | looks like an important bitmap; bit 3 is checked a lot of time; nothing to do with colors, just a mnemonic name |
 | ffd2    |      |                |       |                                                                                                                 |
 | ffd3    | 1    | crtc_r10_mem   | [5:6] | memory backup of CRTC R10 content                                                                               |
