@@ -99,7 +99,7 @@ bios_bootkey:
     ld      de,$0000                        ;[c088] d = track = 0; e = sector = 0
     ld      bc,$4000                        ;[c08b] b = cmd = read ($40); c = drive = 0
     ld      hl,$0080                        ;[c08e] load in $0080
-    ld      a,$01                           ;[c091] formatting mode, seems to be 384 bytes per sector
+    ld      a,$01                           ;[c091] formatting mode, seems to be 256 bytes per sector
     call    fdc_rwfs_c19d                   ;[c093] invoke reading
     cp      $ff                             ;[c096] check for error...
     jr      nz,bios_bootdisk                ;[c098] ...if ok, go on with loading
@@ -447,8 +447,8 @@ label_c216:
     jr      z,label_c229                    ;[c220] ...if not, end writing
     outi                                    ;[c222] write data from buffer to FDC:  IO(c) = *(hl++); b--;
     jr      nz,label_c216                   ;[c224]
-    dec     d                               ;[c226] bytes per sector is usually 512, must use a double byte counter
-    jr      nz,label_c216                   ;[c227] write ends when d = 0 and b = 0
+    dec     d                               ;[c226] decrement burst counter
+    jr      nz,label_c216                   ;[c227]
 
 label_c229:
     out     ($dc),a                         ;[c229]
@@ -489,7 +489,7 @@ label_c25e:
     call    fdc_send_rw_args_c34e           ;[c262] send "read data" arguments (common with "write data" arguments)
     pop     de                              ;[c265]
     ld      c,$c1                           ;[c266] prepare IO address in c
-    ld      b,e                             ;[c268] load number of bytes to write (LSB)
+    ld      b,e                             ;[c268] load number of bytes to write (first burst)
     ld      hl,($ffbd)                      ;[c269] load base address of reading buffer
 label_c26c:
     in      a,($82)                         ;[c26c] read PORTC
@@ -500,8 +500,8 @@ label_c26c:
     jr      z,label_c27f                    ;[c276] ...if not, end reading
     ini                                     ;[c278] read data from FDC to *hl, hl++, b--
     jr      nz,label_c26c                   ;[c27a]
-    dec     d                               ;[c27c] bytes per sector is usually 512, must use a double byte counter
-    jr      nz,label_c26c                   ;[c27d] read ends when d = 0 and b = 0
+    dec     d                               ;[c27c] decrement burst counter
+    jr      nz,label_c26c                   ;[c27d]
 
 label_c27f:
     out     ($dc),a                         ;[c27f]
@@ -541,10 +541,11 @@ label_c2b6:
     ; Compute number of bytes per sector
     ; Arguments:
     ; - $ffb8: bytes per sector "shift factor". If = 0, FM encoding is used. If != 0, MFM encoding is used
-    ; - $ffba: lower nibble, manually add some more bps (TODO)
-    ; - $ffbb: sector number (only bit 7 is considered)
+    ; - $ffba: lower nibble = burst_increment
+    ; - $ffbb: (sector number), only bit 7 is considered = read_more_flag
     ; Return:
-    ; - de: bytes per sector
+    ; - d: number of bursts
+    ; - e: size of first burst (may be $00 = 256 or $80 = 128)
 fdc_compute_bps_c2b7:
     ld      e,$00                           ;[c2b7] e = 0
     ld      a,($ffb8)                       ;[c2b9] load bytes per sector
@@ -563,9 +564,9 @@ fdc_compute_bps_c2b7:
     jr      label_c2e2                      ;[c2d2] return, d as above, e = 0
 label_c2d4:                                 ;       if bytes per sector != 1024...
     or      a                               ;[c2d4]
-    jr      nz,label_c2d9                   ;[c2d5] if bytes per sector != 128 (*$ffb8 = 0)...
+    jr      nz,label_c2d9                   ;[c2d5] if bytes per sector == 128 (*$ffb8 = 0)...
     ld      e,$80                           ;[c2d7] e = 128
-label_c2d9:
+label_c2d9:                                 ;       if bytes per sector == 256...
     ld      a,($ffba)                       ;[c2d9] load (lower nibble of) operation command
     and     $0f                             ;[c2dc]
     ld      d,$01                           ;[c2de]
