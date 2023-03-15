@@ -961,7 +961,7 @@ label_c524:
     ld      b,a                             ;[c52e] B = "current_row"
     jp      label_c5e5                      ;[c52f]
 
-    ; print LF ($0d) Line Feed
+    ; print LF ($0a) Line Feed
 label_c532:
     ld      a,($ffcb)                       ;[c532]
     ld      b,a                             ;[c535] B = "current_row"
