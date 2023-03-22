@@ -346,8 +346,10 @@ tohex:
     ret                                     ;[c18e]
 
 ; putstr: prints a null-terminated string
-; String is passed as a pointer pushed onto the stack.
-; The argument pointer is altered, function will always return it pointing to first location after string terminator.
+; String is automatically passed when calling this routine, and must be located immediately after the call. Example:
+; call putstr
+; BYTE "Hello, world!\x00"
+; ;;; rest of the code...
 putstr:
     ex      (sp),hl                         ;[c18f] load the argument from the stack in hl
 label_c190:
@@ -391,7 +393,7 @@ fdc_rwfs_c19d:
     cp      $20                             ;[c1c8]
     jp      z,fdc_sw_seek                   ;[c1ca] case $20: move head to desired track
     cp      $f0                             ;[c1cd]
-    jp      z,fdc_sw_format                 ;[c1cf] case $f0: seek to desired track
+    jp      z,fdc_sw_format                 ;[c1cf] case $f0: format desired track
     ld      a,$ff                           ;[c1d2]
     jp      fdc_sw_default                  ;[c1d4] default: return -1
 fdc_sw_write_data:
@@ -883,7 +885,7 @@ bios_putchar_c45e:
     cp      $1a                             ;[c4a4] jump if SUB
     jp      z,label_c5ee                    ;[c4a6]
     cp      $07                             ;[c4a9] jump if BEL
-    call    z,$c5f4                         ;[c4ab]
+    call    z,label_c5f4                    ;[c4ab]
     cp      $00                             ;[c4ae] jump if NUL
     jp      z,label_c6a3                    ;[c4b0]     save_index_restore_registers_and_ret()
     jp      label_c4be                      ;[c4b3] jump if any other not printable character
@@ -1080,7 +1082,8 @@ label_c5ee:
     call    $c764                           ;[c5ee] display_clear()
     jp      label_c6a3                      ;[c5f1] save_index_restore_registers_and_ret()
 
-    ; unreachable (?)
+    ; "prints" BEL, making speaker beep
+label_c5f4:
     xor     a                               ;[c5f4]
     out     ($da),a                         ;[c5f5] sound speaker beep
     ret                                     ;[c5f7]
