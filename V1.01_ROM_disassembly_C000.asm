@@ -902,14 +902,14 @@ label_c4be:
     pop     hl                              ;[c4c0] hl <- iy (copy of cursor position)
     call    $c715                           ;[c4c1] display_cursor_to_video_mem_ptr()
     ld      (hl),c                          ;[c4c4] put character in video memory
-    call    $c795                           ;[c4c5] bank7_in(): enable shadow video memory
+    call    $c795                           ;[c4c5] bank_video_attribute_memory()
     ld      a,($ffd1)                       ;[c4c8]
     ld      b,a                             ;[c4cb]
     ld      a,($ffd2)                       ;[c4cc]
     and     (hl)                            ;[c4cf] a = *(0xffd2) & character in video memory
     or      b                               ;[c4d0] a |= *(0xffd1)
     ld      (hl),a                          ;[c4d1] write again in video memory
-    call    $c79e                           ;[c4d2] bank7_out()
+    call    $c79e                           ;[c4d2] bank_video_char_memory()
     call    $c5f8                           ;[c4d5] increment cursor column position
     jr      c,label_c4e0                    ;[c4d8] if posx > "max column width", must do something else before the end
     call    $c613                           ;[c4da] increments hl counter and update cursor position in CRTC
@@ -1161,31 +1161,31 @@ label_c65a:
     jr      nz,label_c65a                   ;[c662] 20 f6
 label_c664:
     ld      a,($ffcd)                       ;[c664] read "number of rows" of display
-    ld      d,a                             ;[c667] 57
-    ld      a,($ffcf)                       ;[c668] 3a cf ff
-    ld      e,a                             ;[c66b] 5f
-    call    $c805                           ;[c66c] cd 05 c8
-    ret                                     ;[c66f] c9
+    ld      d,a                             ;[c667]
+    ld      a,($ffcf)                       ;[c668]
+    ld      e,a                             ;[c66b]
+    call    $c805                           ;[c66c]
+    ret                                     ;[c66f]
 
-    push    ix                              ;[c670] dd e5
-    pop     hl                              ;[c672] e1
-    ld      de,$0730                        ;[c673] 11 30 07
-    ld      b,$50                           ;[c676] 06 50
-    add     hl,de                           ;[c678] 19
-    ld      de,$2000                        ;[c679] 11 00 20
-    call    $c795                           ;[c67c] bank7_in()
+    push    ix                              ;[c670]
+    pop     hl                              ;[c672]
+    ld      de,$0730                        ;[c673]
+    ld      b,$50                           ;[c676]
+    add     hl,de                           ;[c678]
+    ld      de,$2000                        ;[c679]
+    call    $c795                           ;[c67c] bank_video_attribute_memory()
     call    $c715                           ;[c67f] display_cursor_to_video_mem_ptr()
-    push    hl                              ;[c682] e5
-    push    bc                              ;[c683] c5
-    ld      e,$00                           ;[c684] 1e 00
-    call    $c690                           ;[c686] cd 90 c6
-    pop     bc                              ;[c689] c1
-    pop     hl                              ;[c68a] e1
-    call    $c79e                           ;[c68b] bank7_out()
-    ld      e,$20                           ;[c68e] 1e 20
+    push    hl                              ;[c682]
+    push    bc                              ;[c683]
+    ld      e,$00                           ;[c684]
+    call    $c690                           ;[c686]
+    pop     bc                              ;[c689]
+    pop     hl                              ;[c68a]
+    call    $c79e                           ;[c68b] bank_video_char_memory()
+    ld      e,$20                           ;[c68e]
 label_c690:
-    ld      (hl),e                          ;[c690] 73
-    inc     hl                              ;[c691] 23
+    ld      (hl),e                          ;[c690]
+    inc     hl                              ;[c691]
     bit     3,h                             ;[c692] if (HL < 2048)
     call    z,$c715                         ;[c694]     display_cursor_to_video_mem_ptr()
     djnz    label_c690                      ;[c697]
@@ -1427,8 +1427,10 @@ label_c770:
     ld      ($ffcb),a                       ;[c791] "current_row" = 0
     ret                                     ;[c794]
 
-    ; SUBROUTINE C795: bank7_in()
-    ; Enable memory Bank 7
+    ; SUBROUTINE C795: bank_video_attribute_memory()
+    ; Bank out memory chip in H8-H9-H10.
+    ; Bank in memory chip in J8-J9-J10.
+    ; Enable access to the character attribute video memory.
     push    af                              ;[c795]
     in      a,($81)                         ;[c796]
     set     7,a                             ;[c798]
@@ -1436,8 +1438,10 @@ label_c770:
     pop     af                              ;[c79c]
     ret                                     ;[c79d]
 
-    ; SUBROUTINE C79E: bank7_out()
-    ; Disable memory Bank 7
+    ; SUBROUTINE C79E: bank_video_char_memory()
+    ; Bank out memory chip in J8-J9-J10.
+    ; Bank in memory chip in H8-H9-H10.
+    ; Enable access to the character video memory.
     push    af                              ;[c79e]
     in      a,($81)                         ;[c79f]
     res     7,a                             ;[c7a1]
@@ -1457,61 +1461,62 @@ label_c770:
     pop     de                              ;[c7b4] d1
     ret                                     ;[c7b5] c9
 
-    ld      a,($ffd0)                       ;[c7b6] 3a d0 ff
-    ld      c,a                             ;[c7b9] 4f
+    ld      a,($ffd0)                       ;[c7b6]
+    ld      c,a                             ;[c7b9]
     call    $c6f1                           ;[c7ba] display_add_row_column()
-    push    hl                              ;[c7bd] e5
-    add     hl,de                           ;[c7be] 19
-    ex      de,hl                           ;[c7bf] eb
-    pop     hl                              ;[c7c0] e1
-    ld      a,($ffd0)                       ;[c7c1] 3a d0 ff
-    ld      b,a                             ;[c7c4] 47
-    ld      a,($ffcf)                       ;[c7c5] 3a cf ff
-    sub     b                               ;[c7c8] 90
-    inc     a                               ;[c7c9] 3c
-    ld      b,a                             ;[c7ca] 47
+    push    hl                              ;[c7bd]
+    add     hl,de                           ;[c7be]
+    ex      de,hl                           ;[c7bf]
+    pop     hl                              ;[c7c0]
+    ld      a,($ffd0)                       ;[c7c1]
+    ld      b,a                             ;[c7c4]
+    ld      a,($ffcf)                       ;[c7c5]
+    sub     b                               ;[c7c8]
+    inc     a                               ;[c7c9]
+    ld      b,a                             ;[c7ca]
     call    $c715                           ;[c7cb] display_cursor_to_video_mem_ptr()
-    ex      de,hl                           ;[c7ce] eb
+    ex      de,hl                           ;[c7ce]
     call    $c715                           ;[c7cf] display_cursor_to_video_mem_ptr()
-    ex      de,hl                           ;[c7d2] eb
-    push    bc                              ;[c7d3] c5
-    push    de                              ;[c7d4] d5
-    push    hl                              ;[c7d5] e5
-    ld      c,$02                           ;[c7d6] 0e 02
+    ex      de,hl                           ;[c7d2]
+    push    bc                              ;[c7d3]
+    push    de                              ;[c7d4]
+    push    hl                              ;[c7d5]
+    ld      c,$02                           ;[c7d6]
 label_c7d8:
-    ld      a,(hl)                          ;[c7d8] 7e
-    ld      (de),a                          ;[c7d9] 12
-    inc     de                              ;[c7da] 13
-    ld      a,d                             ;[c7db] 7a
-    and     $07                             ;[c7dc] e6 07
-    or      $d0                             ;[c7de] f6 d0
-    ld      d,a                             ;[c7e0] 57
-    inc     hl                              ;[c7e1] 23
+    ld      a,(hl)                          ;[c7d8]
+    ld      (de),a                          ;[c7d9]
+    inc     de                              ;[c7da]
+    ld      a,d                             ;[c7db]
+    and     $07                             ;[c7dc]
+    or      $d0                             ;[c7de]
+    ld      d,a                             ;[c7e0]
+    inc     hl                              ;[c7e1]
     bit     3,h                             ;[c7e2] if (HL < 2048)
     call    z,$c715                         ;[c7e4]     display_cursor_to_video_mem_ptr()
-    djnz    label_c7d8                      ;[c7e7] 10 ef
-    dec     c                               ;[c7e9] 0d
-    jr      z,label_c7f6                    ;[c7ea] 28 0a
-    ld      a,c                             ;[c7ec] 79
-    pop     hl                              ;[c7ed] e1
-    pop     de                              ;[c7ee] d1
-    pop     bc                              ;[c7ef] c1
-    ld      c,a                             ;[c7f0] 4f
-    call    $c795                           ;[c7f1] bank7_in()
-    jr      label_c7d8                      ;[c7f4] 18 e2
+    djnz    label_c7d8                      ;[c7e7]
+    dec     c                               ;[c7e9]
+    jr      z,label_c7f6                    ;[c7ea]
+    ld      a,c                             ;[c7ec]
+    pop     hl                              ;[c7ed]
+    pop     de                              ;[c7ee]
+    pop     bc                              ;[c7ef]
+    ld      c,a                             ;[c7f0]
+    call    $c795                           ;[c7f1] bank_video_attribute_memory()
+    jr      label_c7d8                      ;[c7f4]
 label_c7f6:
-    call    $c79e                           ;[c7f6] bank7_out()
-    ret                                     ;[c7f9] c9
+    call    $c79e                           ;[c7f6] bank_video_char_memory()
+    ret                                     ;[c7f9]
 
-    push    de                              ;[c7fa] d5
-    push    bc                              ;[c7fb] c5
-    ld      de,$0050                        ;[c7fc] 11 50 00
-    call    $c7b6                           ;[c7ff] cd b6 c7
-    pop     bc                              ;[c802] c1
-    pop     de                              ;[c803] d1
-    ret                                     ;[c804] c9
+    push    de                              ;[c7fa]
+    push    bc                              ;[c7fb]
+    ld      de,$0050                        ;[c7fc]
+    call    $c7b6                           ;[c7ff]
+    pop     bc                              ;[c802]
+    pop     de                              ;[c803]
+    ret                                     ;[c804]
 
-    ; SUBROUTINE C805:
+    ; SUBROUTINE C805
+    ; Clear display (?)
     ld      a,e                             ;[c805]
     sub     c                               ;[c806]
     inc     a                               ;[c807]
@@ -1524,10 +1529,10 @@ label_c80d:
     call    $c6f1                           ;[c80d] display_add_row_column()
 label_c810:
     call    $c715                           ;[c810] display_cursor_to_video_mem_ptr()
-    ld      (hl),$20                        ;[c813] write ' ' directly in video mem
-    call    $c795                           ;[c815] bank7_in()
-    ld      (hl),$00                        ;[c818] write 0x00 in shadow video mem
-    call    $c79e                           ;[c81a] bank7_out()
+    ld      (hl),$20                        ;[c813] write ' ' directly in char video mem
+    call    $c795                           ;[c815] bank_video_attribute_memory()
+    ld      (hl),$00                        ;[c818] write 0x00 in attribute video memory (no attribute)
+    call    $c79e                           ;[c81a] bank_video_char_memory()
     inc     hl                              ;[c81d] increment video mem pointer
     dec     e                               ;[c81e]
     jr      nz,label_c810                   ;[c81f]
@@ -1543,14 +1548,14 @@ label_c810:
     ret                                     ;[c82f]
 
     ld      a,($ffcd)                       ;[c830] read "number of rows" of display
-    ld      b,a                             ;[c833] 47
+    ld      b,a                             ;[c833]
     ld      a,($ffce)                       ;[c834] read "current row" (?)
     cp      b                               ;[c837]
     jr      z,label_c845                    ;[c838] if (current_row == number_of_rows), jump
-    ld      d,a                             ;[c83a] 57
-    ld      a,b                             ;[c83b] 78
-    sub     d                               ;[c83c] 92
-    ld      d,a                             ;[c83d] 57
+    ld      d,a                             ;[c83a]
+    ld      a,b                             ;[c83b]
+    sub     d                               ;[c83c]
+    ld      d,a                             ;[c83d]
 label_c83e:
     dec     b                               ;[c83e] 05
     call    $c7fa                           ;[c83f] cd fa c7
@@ -1761,7 +1766,7 @@ label_c8ea:
     ex      de,hl                           ;[c92c] DE = difference
     pop     hl                              ;[c92d] restore result of first call in HL
     ld      b,a                             ;[c92e] B = A (the same from caller, is always preserved)
-    call    $c795                           ;[c92f] bank7_in()
+    call    $c795                           ;[c92f] bank_video_attribute_memory()
 
                                             ;       do {
 label_c932:
@@ -1778,7 +1783,7 @@ label_c932:
     or      e                               ;[c93b]
     jr      nz,label_c932                   ;[c93c] } while (DE != 0);
 
-    call    $c79e                           ;[c93e] bank7_out()
+    call    $c79e                           ;[c93e] bank_video_char_memory()
     ret                                     ;[c941]
 
     ; SUBROUTINE C942: crtc_cursor_start_raster()
@@ -2262,7 +2267,7 @@ label_cbc6:
     ld      bc,$0780                        ;[cbda]
     push    ix                              ;[cbdd]
     pop     hl                              ;[cbdf]
-    call    $c795                           ;[cbe0] bank7_in()
+    call    $c795                           ;[cbe0] bank_video_attribute_memory()
     ld      a,($ffd2)                       ;[cbe3]
     ld      d,a                             ;[cbe6]
     ld      e,$20                           ;[cbe7]
@@ -2272,18 +2277,18 @@ label_cbe9:
     and     d                               ;[cbed]
     jr      nz,label_cbf9                   ;[cbee]
     ld      (hl),$00                        ;[cbf0]
-    call    $c795                           ;[cbf2] bank7_in()
+    call    $c795                           ;[cbf2] bank_video_attribute_memory()
     ld      (hl),e                          ;[cbf5]
-    call    $c795                           ;[cbf6] bank7_in()
+    call    $c795                           ;[cbf6] bank_video_attribute_memory()
 label_cbf9:
-    inc     hl                              ;[cbf9] 23
-    dec     bc                              ;[cbfa] 0b
-    ld      a,b                             ;[cbfb] 78
-    or      c                               ;[cbfc] b1
-    jr      nz,label_cbe9                   ;[cbfd] 20 ea
-    call    $c79e                           ;[cbff] bank7_out()
-    xor     a                               ;[cc02] af
-    ret                                     ;[cc03] c9
+    inc     hl                              ;[cbf9]
+    dec     bc                              ;[cbfa]
+    ld      a,b                             ;[cbfb]
+    or      c                               ;[cbfc]
+    jr      nz,label_cbe9                   ;[cbfd]
+    call    $c79e                           ;[cbff] bank_video_char_memory()
+    xor     a                               ;[cc02]
+    ret                                     ;[cc03]
 
     ; some display-related routine
     ld      a,($ffd0)                       ;[cc04]
@@ -2506,33 +2511,33 @@ label_cd51:
     ld      b,$18                           ;[cd55] row = 24
     ld      c,$00                           ;[cd57] column = 0
     call    $c6f1                           ;[cd59] display_add_row_column()
-    ld      a,($bfea)                       ;[cd5c] 3a ea bf
-    ld      c,a                             ;[cd5f] 4f
-    ld      b,$46                           ;[cd60] 06 46
-    ld      a,b                             ;[cd62] 78
-    ld      ($ffda),a                       ;[cd63] 32 da ff
+    ld      a,($bfea)                       ;[cd5c]
+    ld      c,a                             ;[cd5f]
+    ld      b,$46                           ;[cd60]
+    ld      a,b                             ;[cd62]
+    ld      ($ffda),a                       ;[cd63]
 label_cd66:
     call    $c715                           ;[cd66] display_cursor_to_video_mem_ptr()
-    ld      a,(de)                          ;[cd69] 1a
-    ld      (hl),a                          ;[cd6a] 77
-    call    $c795                           ;[cd6b] bank7_in()
-    ld      (hl),c                          ;[cd6e] 71
-    call    $c79e                           ;[cd6f] bank7_out()
-    inc     de                              ;[cd72] 13
-    inc     hl                              ;[cd73] 23
-    djnz    label_cd66                      ;[cd74] 10 f0
-    ld      a,($ffda)                       ;[cd76] 3a da ff
-    or      a                               ;[cd79] b7
-    jr      z,label_cd88                    ;[cd7a] 28 0c
-    ld      b,$0a                           ;[cd7c] 06 0a
-    ld      a,($bfeb)                       ;[cd7e] 3a eb bf
-    ld      c,a                             ;[cd81] 4f
-    xor     a                               ;[cd82] af
-    ld      ($ffda),a                       ;[cd83] 32 da ff
-    jr      label_cd66                      ;[cd86] 18 de
+    ld      a,(de)                          ;[cd69]
+    ld      (hl),a                          ;[cd6a]
+    call    $c795                           ;[cd6b] bank_video_attribute_memory()
+    ld      (hl),c                          ;[cd6e]
+    call    $c79e                           ;[cd6f] bank_video_char_memory()
+    inc     de                              ;[cd72]
+    inc     hl                              ;[cd73]
+    djnz    label_cd66                      ;[cd74]
+    ld      a,($ffda)                       ;[cd76]
+    or      a                               ;[cd79]
+    jr      z,label_cd88                    ;[cd7a]
+    ld      b,$0a                           ;[cd7c]
+    ld      a,($bfeb)                       ;[cd7e]
+    ld      c,a                             ;[cd81]
+    xor     a                               ;[cd82]
+    ld      ($ffda),a                       ;[cd83]
+    jr      label_cd66                      ;[cd86]
 label_cd88:
-    xor     a                               ;[cd88] af
-    ret                                     ;[cd89] c9
+    xor     a                               ;[cd88]
+    ret                                     ;[cd89]
 
 label_cd8a:
     ld      a,c                             ;[cd8a]
@@ -2555,14 +2560,14 @@ label_cd9a:
     ld      c,$20                           ;[cdab]
 label_cdad:
     call    $c715                           ;[cdad] display_cursor_to_video_mem_ptr()
-    ld      (hl),c                          ;[cdb0] 71
-    inc     hl                              ;[cdb1] 23
-    djnz    label_cdad                      ;[cdb2] 10 f9
-    ret                                     ;[cdb4] c9
+    ld      (hl),c                          ;[cdb0]
+    inc     hl                              ;[cdb1]
+    djnz    label_cdad                      ;[cdb2]
+    ret                                     ;[cdb4]
 
 label_cdb5:
-    xor     a                               ;[cdb5] af
-    ret                                     ;[cdb6] c9
+    xor     a                               ;[cdb5]
+    ret                                     ;[cdb6]
 
     ld      b,a                             ;[cdb7]
     inc     a                               ;[cdb8]
@@ -2571,9 +2576,9 @@ label_cdb5:
     call    $c715                           ;[cdbf] display_cursor_to_video_mem_ptr()
     ld      (hl),c                          ;[cdc2]
     ld      a,($bfeb)                       ;[cdc3]
-    call    $c795                           ;[cdc6] bank7_in()
+    call    $c795                           ;[cdc6] bank_video_attribute_memory()
     ld      (hl),a                          ;[cdc9]
-    call    $c79e                           ;[cdca] bank7_out()
+    call    $c79e                           ;[cdca] bank_video_char_memory()
     inc     hl                              ;[cdcd]
     ld      ($ffda),hl                      ;[cdce]
     ld      a,b                             ;[cdd1]
@@ -2607,18 +2612,18 @@ label_cdb5:
     call    $c6f1                           ;[cde5] display_add_row_column()
     call    $c715                           ;[cde8] display_cursor_to_video_mem_ptr()
     ld      (hl),d                          ;[cdeb] put D in video memory
-    call    $c795                           ;[cdec] bank7_in()
+    call    $c795                           ;[cdec] bank_video_attribute_memory()
     ld      (hl),e                          ;[cdef] put E in shadow video memory (?)
-    call    $c79e                           ;[cdf0] bank7_out()
+    call    $c79e                           ;[cdf0] bank_video_char_memory()
     ret                                     ;[cdf3]
 
     call    $c69a                           ;[cdf4] bios_load_ix_iy()
     call    $c6f1                           ;[cdf7] display_add_row_column()
     call    $c715                           ;[cdfa] display_cursor_to_video_mem_ptr()
     ld      d,(hl)                          ;[cdfd]
-    call    $c795                           ;[cdfe] bank7_in()
+    call    $c795                           ;[cdfe] bank_video_attribute_memory()
     ld      e,(hl)                          ;[ce01]
-    call    $c79e                           ;[ce02] bank7_out()
+    call    $c79e                           ;[ce02] bank_video_char_memory()
     ret                                     ;[ce05]
 
     ; [ce06]
