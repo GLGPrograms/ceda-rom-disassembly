@@ -302,9 +302,8 @@ sio_chB_cfg_base:
     jp      $0010                           ;[c162] jump to just loaded code
 
     ; This $c165/$0010 routine copies whole RAM content, from [$0000:$ffff],
-    ; into the same location. Apparently, it has no sense, but it is confirmed
-    ; by oscilloscope bus acquisitions.
-    ; Time lost by doing this: about 344ms.
+    ; into the same location. This recomputes the parity bit of all memory locations.
+    ; Parity is held in DRAM chip located in cell K9.
 
     ; this code is executed from [$0010:$000e]
     ; arguments:
