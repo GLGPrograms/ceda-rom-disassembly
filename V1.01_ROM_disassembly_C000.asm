@@ -1032,12 +1032,11 @@ label_c59b:
     jr      z,label_c5b8                    ;[c5a3]
     dec     c                               ;[c5a5]
 
-    ; if (magenta:3 == 0), jump label_c5ae
-    ld      a,($ffd1)                       ;[c5a6]
+    ld      a,($ffd1)                       ;[c5a6] if (text attribute == stretch) {
     bit     3,a                             ;[c5a9]
     jr      z,label_c5ae                    ;[c5ab]
-
-    dec     c                               ;[c5ad]
+    dec     c                               ;[c5ad]     decrement C again
+                                            ;       }
 label_c5ae:
     ld      a,c                             ;[c5ae]
     ld      ($ffca),a                       ;[c5af] store "current_column"
@@ -1049,11 +1048,11 @@ label_c5b8:
     ld      b,a                             ;[c5bb]
 
     ; if (magenta:3 == 0), jump to label_c5c4
-    ld      a,($ffd1)                       ;[c5bc]
+    ld      a,($ffd1)                       ;[c5bc] if (text attribute == stretch) {
     bit     3,a                             ;[c5bf]
     jr      z,label_c5c4                    ;[c5c1]
-
-    dec     b                               ;[c5c3]
+    dec     b                               ;[c5c3]     decrement B
+                                            ;       }
 label_c5c4:
     ld      a,b                             ;[c5c4]
     ld      ($ffca),a                       ;[c5c5] store "current_column"
@@ -1088,16 +1087,16 @@ label_c5f4:
     ret                                     ;[c5f7]
 
     ; SUBROUTINE 0xC5F8
-    ; this subroutine seems to handle the column/line cursor position.
-    ; to be verified
+    ; this subroutine advances the cursor,
+    ; taking into account end-of-line and "stretch" attribute
     ld      a,($ffca)                       ;[c5f8] load cursor posx
     ld      c,a                             ;[c5fb]
-    inc     c                               ;[c5fc] increment posx by one
+    inc     c                               ;[c5fc] increment posx
 
-    ld      a,($ffd1)                       ;[c5fd] if (magenta:3) {
+    ld      a,($ffd1)                       ;[c5fd] if (text attribute == "stretch") {
     bit     3,a                             ;[c600]
     jr      z,label_c605                    ;[c602]
-    inc     c                               ;[c604]     increment C (posx)
+    inc     c                               ;[c604]     increment posx again
                                             ;       }
 label_c605:
     ld      a,($ffcf)                       ;[c605] load "maximum column width - 1" value
@@ -1110,11 +1109,12 @@ label_c60f:
     ret                                     ;[c612]
 
     ; SUBROUTINE $C613
-    inc     hl                              ;[c613] increment hl by one
-    ld      a,($ffd1)                       ;[c614]
+    inc     hl                              ;[c613] increment hl
+    ld      a,($ffd1)                       ;[c614] if (text attribute == "stretch") {
     bit     3,a                             ;[c617]
-    jr      z,label_c61c                    ;[c619] if bit 3 of $ffd1 is set...
-    inc     hl                              ;[c61b] do another increment on hl
+    jr      z,label_c61c                    ;[c619]
+    inc     hl                              ;[c61b]     increment hl again
+                                            ;       }
 label_c61c:
     call    crtc_update_cursor_position     ;[c61c] crtc_update_cursor_position(hl, ix)
     ret                                     ;[c61f]
@@ -1224,7 +1224,7 @@ label_c6a3:
     inc     hl                              ;[c6bf]
     ld      (hl),$4f                        ;[c6c0] *$ffd0 = "79" (columns-1)
     inc     hl                              ;[c6c2]
-    ld      (hl),a                          ;[c6c3] *$ffd1 = 0 (clear "magenta" bitmap)
+    ld      (hl),a                          ;[c6c3] *$ffd1 = 0 (clear "magenta") (text attribute bitmap)
     inc     hl                              ;[c6c4]
     ld      (hl),a                          ;[c6c5] *$ffd2 = 0
     inc     hl                              ;[c6c6]
@@ -1617,7 +1617,7 @@ crtc_cfg_base:
     BYTE $00                                ;[c874]
 
 
-    ; set magenta:3
+    ; set magenta:3 => enable text attribute "stretch"
     ld      a,($ffd1)                       ;[c875]
     set     3,a                             ;[c878]
     ld      ($ffd1),a                       ;[c87a]
@@ -1654,7 +1654,7 @@ label_c895:
     ld      hl,$0000                        ;[c8a6]
     call    $c71c                           ;[c8a9] crtc_update_cursor_position()
 
-    ; clear magenta:3
+    ; clear magenta:3 => disable text attribute "stretch"
     ld      a,($ffd1)                       ;[c8ac]
     res     3,a                             ;[c8af]
     ld      ($ffd1),a                       ;[c8b1]
@@ -1702,21 +1702,21 @@ label_c8d7:
     ret                                     ;[c8e9]
 
 label_c8ea:
-    ld      a,c                             ;[c8ea] 79
-    and     $0f                             ;[c8eb] e6 0f
-    rlca                                    ;[c8ed] 07
-    rlca                                    ;[c8ee] 07
-    rlca                                    ;[c8ef] 07
-    rlca                                    ;[c8f0] 07
-    cpl                                     ;[c8f1] 2f
-    ld      b,a                             ;[c8f2] 47
-    ld      a,($ffd1)                       ;[c8f3] 3a d1 ff
-    and     b                               ;[c8f6] a0
-    ld      ($ffd1),a                       ;[c8f7] 32 d1 ff
-    xor     a                               ;[c8fa] af
-    ret                                     ;[c8fb] c9
+    ld      a,c                             ;[c8ea]
+    and     $0f                             ;[c8eb]
+    rlca                                    ;[c8ed]
+    rlca                                    ;[c8ee]
+    rlca                                    ;[c8ef]
+    rlca                                    ;[c8f0]
+    cpl                                     ;[c8f1]
+    ld      b,a                             ;[c8f2]
+    ld      a,($ffd1)                       ;[c8f3] magenta: change text attributes
+    and     b                               ;[c8f6]
+    ld      ($ffd1),a                       ;[c8f7]
+    xor     a                               ;[c8fa]
+    ret                                     ;[c8fb]
 
-    ; SUBROUTINE C8FC: reset magenta.
+    ; SUBROUTINE C8FC: reset magenta => clear all text attributes
     xor     a                               ;[c8fc]
     ld      ($ffd1),a                       ;[c8fd]
     ret                                     ;[c900]
@@ -1847,14 +1847,14 @@ label_c984:
     ret                                     ;[c994]
 
     ; SUBROUTINE C995
-    ; set magenta:0
+    ; set magenta:0 => enable text attribute "invert"
     ld      hl,$ffd1                        ;[c995]
     set     0,(hl)                          ;[c998]
     xor     a                               ;[c99a]
     ret                                     ;[c99b]
 
     ; SUBROUTINE C99C
-    ; reset magenta:0
+    ; reset magenta:0 => disable text attribute "invert"
     ld      hl,$ffd1                        ;[c99c] 21 d1 ff
     res     0,(hl)                          ;[c99f] cb 86
     xor     a                               ;[c9a1] af
@@ -1875,21 +1875,21 @@ label_c984:
     ret                                     ;[c9b0]
 
     ; SUBROUTINE C9B1
-    ; set magenta 1
+    ; set magenta 1 => enable text attribute "blink"
     ld      hl,$ffd1                        ;[c9b1]
     set     1,(hl)                          ;[c9b4]
     xor     a                               ;[c9b6]
     ret                                     ;[c9b7]
 
     ; SUBROUTINE C9B8
-    ; reset magenta 1
+    ; reset magenta 1 => disable text attribute "blink"
     ld      hl,$ffd1                        ;[c9b8]
     res     1,(hl)                          ;[c9bb]
     xor     a                               ;[c9bd]
     ret                                     ;[c9be]
 
     ; SUBROUTINE C9BF
-    ; set magenta:4
+    ; set magenta:4 => enable text attribute "underline"
     ld      a,($ffd1)                       ;[c9bf]
     and     $8f                             ;[c9c2]
     or      $10                             ;[c9c4]
@@ -1898,7 +1898,7 @@ label_c984:
     ret                                     ;[c9ca]
 
     ; SUBROUTINE C9CB
-    ; reset magenta[4:6]
+    ; reset magenta[4:6] => disable text attribute "blink, underline and hide" ?
     ld      a,($ffd1)                       ;[c9cb]
     and     $8f                             ;[c9ce]
     or      $00                             ;[c9d0]
@@ -1907,7 +1907,7 @@ label_c984:
     ret                                     ;[c9d6]
 
     ; SUBROUTINE C9D7
-    ; set magenta:5
+    ; set magenta:5 => enable text attribute "blink and underline"
     ld      a,($ffd1)                       ;[c9d7]
     and     $8f                             ;[c9da]
     or      $20                             ;[c9dc]
@@ -2369,19 +2369,19 @@ label_cc6b:
     ret                                     ;[cc7e] c9
 
     call    $cdd7                           ;[cc7f] increment_blues_if_zero() ; if (blues == 0), return to $C9FB
-    ld      a,c                             ;[cc82] 79
-    and     $0f                             ;[cc83] e6 0f
-    rlca                                    ;[cc85] 07
-    rlca                                    ;[cc86] 07
-    rlca                                    ;[cc87] 07
-    rlca                                    ;[cc88] 07
-    ld      b,a                             ;[cc89] 47
-    ld      a,($ffd1)                       ;[cc8a] 3a d1 ff
-    and     $0f                             ;[cc8d] e6 0f
-    or      b                               ;[cc8f] b0
-    ld      ($ffd1),a                       ;[cc90] 32 d1 ff
-    xor     a                               ;[cc93] af
-    ret                                     ;[cc94] c9
+    ld      a,c                             ;[cc82]
+    and     $0f                             ;[cc83]
+    rlca                                    ;[cc85]
+    rlca                                    ;[cc86]
+    rlca                                    ;[cc87]
+    rlca                                    ;[cc88]
+    ld      b,a                             ;[cc89]
+    ld      a,($ffd1)                       ;[cc8a] set text attributes from magenta
+    and     $0f                             ;[cc8d]
+    or      b                               ;[cc8f]
+    ld      ($ffd1),a                       ;[cc90]
+    xor     a                               ;[cc93]
+    ret                                     ;[cc94]
 
     call    $cdd7                           ;[cc95] increment_blues_if_zero() ; if (blues == 0), return to $C9FB
     ld      a,c                             ;[cc98] 79
