@@ -14,11 +14,9 @@ make
 
 If you introduce any modification, a CI job will make sure that the final binary won't change.
 
-## Other resources
-- [Schematics](https://github.com/GLGPrograms/ceda-schematics)
-- [Reverse engineering](https://retrofficina.glgprograms.it/doku.php?id=sanco8001)
-
 ## Contributing
+This repository is part of the [ceda](https://github.com/GLGPrograms/ceda-home) documentation project by [Retrofficina GLG](https://retrofficina.glgprograms.it/).
+
 We need your help. No, seriously, send help, this is pure madness. There are many ways:
 - send documentation
 - send software/disk
