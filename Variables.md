@@ -32,9 +32,9 @@
 | ffd0    | 1    |                |       | something which has to do with display columns (see $ffcb and $ffca too)                                                     |
 | ffd1    |      | _magenta_      | [3,4] | current character [text attribute](https://github.com/GLGPrograms/ceda-home/blob/main/pages/video.md#attribute-video-memory) |
 | ffd2    |      |                |       |                                                                                                                              |
-| ffd3    | 1    | crtc_r10_mem   | [5:6] | memory backup of CRTC R10 content                                                                                            |
-| ffd4    | 2    | IX             | -     | text cursor X position (?)                                                                                                   |
-| ffd6    | 2    | IY             | -     | linearized text cursor position                                                                                              |
+| ffd3    | 1    | crtc_r10_mem   | [5:6] | CRTC R10 (cursor start raster)                                                                                               |
+| ffd4    | 2    | IX             | -     | CRTC memory start address                                                                                                    |
+| ffd6    | 2    | IY             | -     | CRTC memory pointer (eg. video memory address - `$d000`)                                                                     |
 | ffd7    |      |                |       |                                                                                                                              |
 | ffd8    | 1    | escaped_char   | ?     | remember current escaping char during a putchar()                                                                            |
 |         |      | "              |       | Values: $00 = no ongoing escaping, $01 = ongoing escape, any other: current char to be escaped?                              |
