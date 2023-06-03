@@ -7,7 +7,7 @@ _main:
     jp      $c030                           ;[c000] reset vector
     jp      $c027                           ;[c003] reset SIO interrupts
     jp      $c027                           ;[c006] reset SIO interrupts
-    jp      $c45e                           ;[c009]
+    jp      $c45e                           ;[c009] putchar()
     jp      $c027                           ;[c00c] reset SIO interrupts
     jp      $c027                           ;[c00f] reset SIO interrupts
     jp      $c027                           ;[c012] reset SIO interrupts
@@ -357,7 +357,7 @@ label_c190:
     or      a                               ;[c192]
     jr      z,label_c19b                    ;[c193] return if a == '\0'
     ld      c,a                             ;[c195]
-    call    $c45e                           ;[c196] putchar(a)
+    call    $c45e                           ;[c196] putchar()
     jr      label_c190                      ;[c199] repeat again
 label_c19b:
     ex      (sp),hl                         ;[c19b] reload altered hl onto the stack
@@ -934,7 +934,8 @@ label_c4fb:
     call    $c620                           ;[c4fb]
     jp      label_c6a3                      ;[c4fe] putchar epilogue: save_index_restore_registers_and_ret()
 
-    ; SUBROUTINE C501; called by c4e0 if posy reached last row
+    ; SUBROUTINE C501
+    ; Perform display frame scroll
 label_c501:
     ld      a,($ffc9)                       ;[c501]
     or      a                               ;[c504]
@@ -1109,7 +1110,7 @@ label_c60f:
     ret                                     ;[c612]
 
     ; SUBROUTINE $C613
-    inc     hl                              ;[c613] increment hl
+    inc     hl                              ;[c613] increment hl (pointer to video memory location)
     ld      a,($ffd1)                       ;[c614] if (text attribute == "stretch") {
     bit     3,a                             ;[c617]
     jr      z,label_c61c                    ;[c619]
@@ -1128,18 +1129,20 @@ label_c61c:
     call    $c71c                           ;[c62a] crtc_update_cursor_position()
     ret                                     ;[c62d] c9
 
-    ld      a,($ffc9)                       ;[c62e] 3a c9 ff
-    or      a                               ;[c631] b7
-    jr      nz,label_c647                   ;[c632] 20 13
-    push    ix                              ;[c634] dd e5
-    pop     hl                              ;[c636] e1
-    ld      de,$0050                        ;[c637] 11 50 00
-    add     hl,de                           ;[c63a] 19
-    call    $c742                           ;[c63b] cd 42 c7
-    ld      b,$17                           ;[c63e] 06 17
-    call    $c7fa                           ;[c640] cd fa c7
-    call    $c670                           ;[c643] cd 70 c6
-    ret                                     ;[c646] c9
+    ; SUBROUTINE $C62E
+    ; Handle hardware frame scroll
+    ld      a,($ffc9)                       ;[c62e]
+    or      a                               ;[c631]
+    jr      nz,label_c647                   ;[c632]
+    push    ix                              ;[c634]
+    pop     hl                              ;[c636] HL = CRTC video memory base address
+    ld      de,$0050                        ;[c637] DE = 80 (number of columns)
+    add     hl,de                           ;[c63a] HL += DE
+    call    $c742                           ;[c63b]
+    ld      b,$17                           ;[c63e]
+    call    $c7fa                           ;[c640] copy status bar one line below (first stage)
+    call    $c670                           ;[c643] clear line text and reset attributes
+    ret                                     ;[c646]
 
 label_c647:
     ld      a,($ffd0)                       ;[c647] 3a d0 ff
@@ -1166,28 +1169,34 @@ label_c664:
     call    $c805                           ;[c66c]
     ret                                     ;[c66f]
 
+    ; SUBROUTINE C670
+    ; Clear line chars and its attributes.
+    ; Input:
+    ;   - IX: CRTC video memory start
     push    ix                              ;[c670]
     pop     hl                              ;[c672]
-    ld      de,$0730                        ;[c673]
+    ld      de,$0730                        ;[c673] DE = 0x730 = 23 * 80
     ld      b,$50                           ;[c676]
-    add     hl,de                           ;[c678]
+    add     hl,de                           ;[c678] HL = IX + 0x730
     ld      de,$2000                        ;[c679]
     call    $c795                           ;[c67c] bank_video_attribute_memory()
     call    $c715                           ;[c67f] display_cursor_to_video_mem_ptr()
     push    hl                              ;[c682]
     push    bc                              ;[c683]
-    ld      e,$00                           ;[c684]
-    call    $c690                           ;[c686]
+    ld      e,$00                           ;[c684] E = 0 (text attributes empty)
+    call    $c690                           ;[c686] reset(E)
     pop     bc                              ;[c689]
     pop     hl                              ;[c68a]
     call    $c79e                           ;[c68b] bank_video_char_memory()
-    ld      e,$20                           ;[c68e]
+    ld      e,$20                           ;[c68e] E = 0x20 (space char)
+
+    ; SUBROUTINE C690
 label_c690:
-    ld      (hl),e                          ;[c690]
-    inc     hl                              ;[c691]
-    bit     3,h                             ;[c692] if (HL < 2048)
-    call    z,$c715                         ;[c694]     display_cursor_to_video_mem_ptr()
-    djnz    label_c690                      ;[c697]
+    ld      (hl),e                          ;[c690] for (B = 0x50; B > 0; --B) {
+    inc     hl                              ;[c691]     /* reset text chars and attributes */
+    bit     3,h                             ;[c692]     if (HL < 2048)
+    call    z,$c715                         ;[c694]         display_cursor_to_video_mem_ptr()
+    djnz    label_c690                      ;[c697] }
     ret                                     ;[c699]
 
     ; SUBROUTINE C69A ; bios_load_ix_iy()
@@ -1262,7 +1271,7 @@ bios_save_ix_iy:
     ; SUBROUTINE C6F1; display_add_row_column()
     ; Linearize row and column coordinates, and add to IX
     ; Input:
-    ;   - IX: ???
+    ;   - IX: CRTC start address
     ;   - B: number of row
     ;   - C: number of column
     ; Output:
@@ -1329,11 +1338,13 @@ label_c701:
     ; Cursor position is specified as if the video matrix has been linearized.
     ; Example: row 7, column 4 => position = (7 * 80) + 4 = $234 => CRTC R14 = $02, CRTC R15 = $34
     ; Input:
-    ;   - HL: l_cur_pos: linearized position of CRTC cursor
+    ;   - HL: l_cur_pos: pointer to next free video memory location (possibly overflowing)
     ;   - IX
     ; Output:
     ;   - IY
 crtc_update_cursor_position:
+    ; first, transform absolute video memory pointer to relative video memory pointer
+    ; (for CRTC consumption - a.k.a. "HL - $d000")
     ld      a,h                             ;[c71c]
     and     $07                             ;[c71d]
     ld      h,a                             ;[c71f] l_cur_pos &= 0x07FF (clamp to range [0;2048[ )
@@ -1351,7 +1362,7 @@ crtc_update_cursor_position:
     ex      de,hl                           ;[c72f]     DE = l_cur_pos + $0800
                                             ;       }
 label_c730:
-    ; Write cursor position (DE = l_cur_pos)
+    ; Write cursor position into CRTC register (DE = l_cur_pos)
     ld      a,$0e                           ;[c730] CRTC R14: cursor position HI
     out     ($a0),a                         ;[c732]
     ld      a,d                             ;[c734]
@@ -1366,27 +1377,34 @@ label_c730:
     pop     iy                              ;[c73f] iy = l_cur_pos
     ret                                     ;[c741]
 
-    ld      a,h                             ;[c742] 7c
-    and     $07                             ;[c743] e6 07
-    ld      h,a                             ;[c745] 67
-    call    $c75b                           ;[c746] cd 5b c7
-    ld      a,$0c                           ;[c749] 3e 0c
-    out     ($a0),a                         ;[c74b] d3 a0
-    ld      a,h                             ;[c74d] 7c
-    out     ($a1),a                         ;[c74e] d3 a1
-    ld      a,$0d                           ;[c750] 3e 0d
-    out     ($a0),a                         ;[c752] d3 a0
-    ld      a,l                             ;[c754] 7d
-    out     ($a1),a                         ;[c755] d3 a1
-    push    hl                              ;[c757] e5
-    pop     ix                              ;[c758] dd e1
-    ret                                     ;[c75a] c9
+    ; SUBROUTINE $C742
+    ; Update CRTC video memory base address register using HL
+    ; Input:
+    ;   - HL: CRTC base address register for video memory
+    ; Output:
+    ;   - IX: CRTC base address register for video memory
+    ld      a,h                             ;[c742]
+    and     $07                             ;[c743] clamp HL to [0;2048[
+    ld      h,a                             ;[c745]
+    call    $c75b                           ;[c746] wait for sync ?
+    ld      a,$0c                           ;[c749] CRTC start address H
+    out     ($a0),a                         ;[c74b]
+    ld      a,h                             ;[c74d]
+    out     ($a1),a                         ;[c74e]
+    ld      a,$0d                           ;[c750] CRTC start address L
+    out     ($a0),a                         ;[c752]
+    ld      a,l                             ;[c754]
+    out     ($a1),a                         ;[c755]
+    push    hl                              ;[c757]
+    pop     ix                              ;[c758]
+    ret                                     ;[c75a]
 
-    in      a,($a0)                         ;[c75b] db a0
+    ; SUBROUTINE $C75D
+    in      a,($a0)                         ;[c75b] read CRTC register cursor L? Or, trigger line or frame sync?
 label_c75d:
     in      a,($82)                         ;[c75d] read PORTC
     bit     1,a                             ;[c75f]
-    jr      z,label_c75d                    ;[c761]
+    jr      z,label_c75d                    ;[c761] wait PORTC:1 == 1
     ret                                     ;[c763]
 
     ; SUBROUTINE C764; display_clear()
@@ -1448,18 +1466,22 @@ label_c770:
     pop     af                              ;[c7a5]
     ret                                     ;[c7a6]
 
-    push    de                              ;[c7a7] d5
-    push    bc                              ;[c7a8] c5
-    ld      a,$50                           ;[c7a9] 3e 50
-    cpl                                     ;[c7ab] 2f
-    ld      d,$ff                           ;[c7ac] 16 ff
-    ld      e,a                             ;[c7ae] 5f
-    inc     de                              ;[c7af] 13
-    call    $c7b6                           ;[c7b0] cd b6 c7
-    pop     bc                              ;[c7b3] c1
-    pop     de                              ;[c7b4] d1
-    ret                                     ;[c7b5] c9
+    push    de                              ;[c7a7]
+    push    bc                              ;[c7a8]
+    ld      a,$50                           ;[c7a9]
+    cpl                                     ;[c7ab]
+    ld      d,$ff                           ;[c7ac]
+    ld      e,a                             ;[c7ae]
+    inc     de                              ;[c7af]
+    call    $c7b6                           ;[c7b0] copy_status_bar()
+    pop     bc                              ;[c7b3]
+    pop     de                              ;[c7b4]
+    ret                                     ;[c7b5]
 
+    ; SUBROUTINE C7B6; copy_status_bar() -- second stage
+    ; Copy bottom status bar one line below (both chars and their attributes)
+    ; Input:
+    ;   - DE
     ld      a,($ffd0)                       ;[c7b6]
     ld      c,a                             ;[c7b9]
     call    $c6f1                           ;[c7ba] display_add_row_column()
@@ -1469,10 +1491,10 @@ label_c770:
     pop     hl                              ;[c7c0]
     ld      a,($ffd0)                       ;[c7c1]
     ld      b,a                             ;[c7c4]
-    ld      a,($ffcf)                       ;[c7c5]
+    ld      a,($ffcf)                       ;[c7c5] read "last column" - 1 (= 0x4f)
     sub     b                               ;[c7c8]
     inc     a                               ;[c7c9]
-    ld      b,a                             ;[c7ca]
+    ld      b,a                             ;[c7ca] B = 0x50 (?)
     call    $c715                           ;[c7cb] display_cursor_to_video_mem_ptr()
     ex      de,hl                           ;[c7ce]
     call    $c715                           ;[c7cf] display_cursor_to_video_mem_ptr()
@@ -1480,9 +1502,10 @@ label_c770:
     push    bc                              ;[c7d3]
     push    de                              ;[c7d4]
     push    hl                              ;[c7d5]
-    ld      c,$02                           ;[c7d6]
-label_c7d8:
-    ld      a,(hl)                          ;[c7d8]
+    ld      c,$02                           ;[c7d6] C = 2 (copy operation is performed twice, one time for chars and the other for attributes)
+label_c7d8:                                 ;       copy bottom status bar to last row
+                                            ;       (remember that whole display has just been moved one line up)
+    ld      a,(hl)                          ;[c7d8] for (B = 0x50; B > 0; --B) {
     ld      (de),a                          ;[c7d9]
     inc     de                              ;[c7da]
     ld      a,d                             ;[c7db]
@@ -1490,26 +1513,28 @@ label_c7d8:
     or      $d0                             ;[c7de]
     ld      d,a                             ;[c7e0]
     inc     hl                              ;[c7e1]
-    bit     3,h                             ;[c7e2] if (HL < 2048)
-    call    z,$c715                         ;[c7e4]     display_cursor_to_video_mem_ptr()
-    djnz    label_c7d8                      ;[c7e7]
-    dec     c                               ;[c7e9]
-    jr      z,label_c7f6                    ;[c7ea]
-    ld      a,c                             ;[c7ec]
+    bit     3,h                             ;[c7e2]     if (HL < 2048)
+    call    z,$c715                         ;[c7e4]         display_cursor_to_video_mem_ptr()
+    djnz    label_c7d8                      ;[c7e7] }
+    dec     c                               ;[c7e9] if (--C != 0) {
+    jr      z,label_c7f6                    ;[c7ea]     /*  bank switch enable text attribute memory,
+    ld      a,c                             ;[c7ec]         and copy them too :-) */
     pop     hl                              ;[c7ed]
     pop     de                              ;[c7ee]
     pop     bc                              ;[c7ef]
     ld      c,a                             ;[c7f0]
-    call    $c795                           ;[c7f1] bank_video_attribute_memory()
-    jr      label_c7d8                      ;[c7f4]
+    call    $c795                           ;[c7f1]     bank_video_attribute_memory()
+    jr      label_c7d8                      ;[c7f4] }
 label_c7f6:
-    call    $c79e                           ;[c7f6] bank_video_char_memory()
+    call    $c79e                           ;[c7f6] bank_video_char_memory() /* restore video char memory bank */
     ret                                     ;[c7f9]
 
+    ; SUBROUTINE C7FA
+    ; Copy status bar one line below (first stage)
     push    de                              ;[c7fa]
     push    bc                              ;[c7fb]
     ld      de,$0050                        ;[c7fc]
-    call    $c7b6                           ;[c7ff]
+    call    $c7b6                           ;[c7ff] copy_status_bar()
     pop     bc                              ;[c802]
     pop     de                              ;[c803]
     ret                                     ;[c804]
