@@ -1400,11 +1400,13 @@ label_c730:
     ret                                     ;[c75a]
 
     ; SUBROUTINE $C75D
-    in      a,($a0)                         ;[c75b] read CRTC register cursor L? Or, trigger line or frame sync?
+    in      a,($a0)                         ;[c75b] read from CRTC (any register will do)
+                                            ;       this resets the frame sync detection circuit
+                                            ;       (74LS109 JK in L9)
 label_c75d:
     in      a,($82)                         ;[c75d] read PORTC
     bit     1,a                             ;[c75f]
-    jr      z,label_c75d                    ;[c761] wait PORTC:1 == 1
+    jr      z,label_c75d                    ;[c761] wait PORTC:1 == 1 (next frame)
     ret                                     ;[c763]
 
     ; SUBROUTINE C764; display_clear()
