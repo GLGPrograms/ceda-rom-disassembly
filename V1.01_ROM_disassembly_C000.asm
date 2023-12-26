@@ -1,8 +1,9 @@
     org 0xc000
 
 PUBLIC _main
-    ; Interrupt Vector Table (?)
-    ; This looks like one
+    ; Jump Table of "extern routines",
+    ; this avoid direct calls to actual routines, which may change if this ROM
+    ; is updated.
 _main:
     jp      $c030                           ;[c000] reset vector
     jp      $c027                           ;[c003] reset SIO interrupts
@@ -18,7 +19,8 @@ _main:
     jp      $cde2                           ;[c021]
     jp      $cdf4                           ;[c024]
 
-    ; disable SIO interrupts
+    ; software reset: disable SIO interrupts, then start over from
+    ; peripherals initialization
 label_c027:
     di                                      ;[c027] disable interrupts
     ld      a,$10                           ;[c028] load A with $10 (reset SIO interrupts)
@@ -29,10 +31,11 @@ label_c027:
     ; main entrypoint, after reset
 
     ; setup uPD8255 (GPIO IC)
-    ; - set PORTA as output (not connected ?)
-    ; - set PORTB as output (bank switching ?)
-    ; - set PORTC as input (both high and low nibble) (bit 1 = used by something unknown, bit 2 = floppy related)
+    ; - set PORTA as output (printer port)
+    ; - set PORTB as output (onboard output service signals)
+    ; - set PORTC as input (onboard input service signals)
     ; - set all ports to Mode 0 (latched outputs, not-latched inputs)
+    ; - see the schematics for more details regarding physical pin connections
     ld      a,$89                           ;[c030] load configuration in A
     out     ($83),a                         ;[c032] write configuration
 
@@ -1849,7 +1852,7 @@ label_c953:
     jr      label_c984                      ;[c959] execute
     ; ... else, ??? restore default settings based on IO port read ???
 label_c95b:
-    ld      a,($c86f)                       ;[c95b] load default CRTC R10 configuration
+    ld      a,($c86f)                       ;[c95b] load default CRTC R10 configuration (cursor data raster)
     ld      d,a                             ;[c95e]
     in      a,($d6)                         ;[c95f]
     bit     5,a                             ;[c961]
