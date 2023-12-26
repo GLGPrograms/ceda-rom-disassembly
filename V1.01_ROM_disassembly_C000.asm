@@ -99,7 +99,7 @@ bios_bootkey:
     ld      de,$0000                        ;[c088] d = track = 0; e = sector = 0
     ld      bc,$4000                        ;[c08b] b = cmd = read ($40); c = drive = 0
     ld      hl,$0080                        ;[c08e] load in $0080
-    ld      a,$01                           ;[c091] formatting mode, seems to be 384 bytes per sector
+    ld      a,$01                           ;[c091] sector size factor = 256 bps
     call    fdc_rwfs_c19d                   ;[c093] invoke reading
     cp      $ff                             ;[c096] check for error...
     jr      nz,bios_bootdisk                ;[c098] ...if ok, go on with loading
@@ -422,13 +422,13 @@ fdc_sw_default:
 fdc_write_data_c1f4:
     call    fdc_seek_c3a9                   ;[c1f4] move to desired track
 fdc_write_retry_c1f7:
-    call    fdc_compute_bps_c2b7            ;[c1f7] compute byte per sectors, result in de
+    call    fdc_compute_bps_c2b7            ;[c1f7] compute bytes to be processed, result in de
     push    de                              ;[c1fa]
     call    fdc_wait_busy                   ;[c1fb]
     ld      c,$c5                           ;[c1fe] load "write data" command with MT and MF flags set
     ld      a,($ffb8)                       ;[c200]
     or      a                               ;[c203]
-    jr      nz,label_c208                   ;[c204] if *ffb8 == 0 (128 bytes per sector)...
+    jr      nz,label_c208                   ;[c204] if ssf = 0 (128 bytes per sector)...
     res     6,c                             ;[c206] ...clear MF flag (FM mode)
 label_c208:
     call    fdc_send_cmd                    ;[c208] send the "write data" command with desired MF flag
@@ -440,7 +440,7 @@ label_c208:
     ld      hl,($ffbd)                      ;[c213] load base address of writing buffer
     ; Buffer writing loop
 label_c216:
-    in      a,($82)                         ;[c216] read PORTC
+    in      a,($82)                         ;[c216] wait until FDC is ready (INT = 1)
     bit     2,a                             ;[c218]
     jr      z,label_c216                    ;[c21a]
     in      a,($c0)                         ;[c21c] read FDC main status register
@@ -448,13 +448,13 @@ label_c216:
     jr      z,label_c229                    ;[c220] ...if not, end writing
     outi                                    ;[c222] write data from buffer to FDC:  IO(c) = *(hl++); b--;
     jr      nz,label_c216                   ;[c224]
-    dec     d                               ;[c226] bytes per sector is usually 512, must use a double byte counter
+    dec     d                               ;[c226]
     jr      nz,label_c216                   ;[c227] write ends when d = 0 and b = 0
 
 label_c229:
-    out     ($dc),a                         ;[c229]
+    out     ($dc),a                         ;[c229] request Terminal Count to FDC
     ei                                      ;[c22b] enable interrupts again
-    call    fdc_rw_status_c3f4              ;[c22c] command response, put it in $ffc0-$ffc6
+    call    fdc_rw_status_c3f4              ;[c22c] read command response, put it in $ffc0-$ffc6
     ld      a,($ffc0)                       ;[c22f] fetch status (ST0)
     and     $c0                             ;[c232] mask Interrupt Code bits (as in fdc_sis routine)...
     cp      $40                             ;[c234]
@@ -463,7 +463,7 @@ label_c229:
     ld      a,($ffbf)                       ;[c23b] keep a retry counter to avoid infinite loops
     dec     a                               ;[c23e] decrement number of remaining retry
     ld      ($ffbf),a                       ;[c23f]
-    jp      nz,fdc_write_retry_c1f7         ;[c242] after 256 retry give up and...
+    jp      nz,fdc_write_retry_c1f7         ;[c242] after 10 tries give up and...
     ld      a,$ff                           ;[c245]
     ret                                     ;[c247] ... return -1
 label_c248:
@@ -476,13 +476,13 @@ label_c248:
 fdc_read_data_c24a:
     call    fdc_seek_c3a9                   ;[c24a] move to desired track
 fdc_read_retry_c24d:
-    call    fdc_compute_bps_c2b7            ;[c24d] compute byte per sectors, result in de
+    call    fdc_compute_bps_c2b7            ;[c24d] compute bytes to be processed, result in de
     push    de                              ;[c250]
     call    fdc_wait_busy                   ;[c251]
     ld      c,$c6                           ;[c254] load "read data" command with MT and MF flags set
     ld      a,($ffb8)                       ;[c256]
     or      a                               ;[c259]
-    jr      nz,label_c25e                   ;[c25a] if *ffb8 == 0 (128 bytes per sector)...
+    jr      nz,label_c25e                   ;[c25a] if ssf = 0 (128 bytes per sector)...
     res     6,c                             ;[c25c] ...clear MF flag (FM mode)
 label_c25e:
     call    fdc_send_cmd                    ;[c25e] send the "read data" command
@@ -493,7 +493,7 @@ label_c25e:
     ld      b,e                             ;[c268] load number of bytes to write (LSB)
     ld      hl,($ffbd)                      ;[c269] load base address of reading buffer
 label_c26c:
-    in      a,($82)                         ;[c26c] read PORTC
+    in      a,($82)                         ;[c26c] wait until FDC is ready (INT = 1)
     bit     2,a                             ;[c26e]
     jr      z,label_c26c                    ;[c270]
     in      a,($c0)                         ;[c272] read FDC main status register
@@ -501,29 +501,31 @@ label_c26c:
     jr      z,label_c27f                    ;[c276] ...if not, end reading
     ini                                     ;[c278] read data from FDC to *hl, hl++, b--
     jr      nz,label_c26c                   ;[c27a]
-    dec     d                               ;[c27c] bytes per sector is usually 512, must use a double byte counter
+    dec     d                               ;[c27c]
     jr      nz,label_c26c                   ;[c27d] read ends when d = 0 and b = 0
 
 label_c27f:
-    out     ($dc),a                         ;[c27f]
+    out     ($dc),a                         ;[c27f] request Terminal Count to FDC
     ei                                      ;[c281] enable interrupts again
-    call    fdc_rw_status_c3f4              ;[c282] command response, put it in $ffc0-$ffc6
+    call    fdc_rw_status_c3f4              ;[c282] read command response, put it in $ffc0-$ffc6
     ld      a,($ffc0)                       ;[c285] fetch status (ST0)
     and     $c0                             ;[c288] mask Interrupt Code bits (as in fdc_sis routine)...
     cp      $40                             ;[c28a]
     jr      nz,label_c29e                   ;[c28c]... and return if IC != 01 (!= "readfail")
-    call    fdc_err_check_c2a0              ;[c28e] after-write error checking (common with "read data")
+    call    fdc_err_check_c2a0              ;[c28e] after-write error checking (common with "write data")
     ld      a,($ffbf)                       ;[c291] keep a retry counter to avoid infinite loops
     dec     a                               ;[c294] decrement number of remaining retry
     ld      ($ffbf),a                       ;[c295]
-    jp      nz,fdc_read_retry_c24d          ;[c298] after 256 retry give up and...
+    jp      nz,fdc_read_retry_c24d          ;[c298] after 10 tries give up and...
     ld      a,$ff                           ;[c29b]
     ret                                     ;[c29d] ... return -1
 label_c29e:
     xor     a                               ;[c29e]
     ret                                     ;[c29f] return 0
 
-    ; TODO this is a FDC routine related to error checking after read/write
+    ; FDC utility function: called only if read or write operation fails.
+    ; A head position reset (recalibrate) is issued if overrun or missing
+    ; address mark in data field event occur.
 fdc_err_check_c2a0:
     ld      a,($ffc2)                       ;[c2a0] read 2nd status register (ST1)
     bit     4,a                             ;[c2a3] check OverRun bit (OR)
@@ -539,53 +541,64 @@ label_c2ab:
 label_c2b6:
     ret                                     ;[c2b6] return and just retry
 
-    ; Compute number of bytes per sector
+    ; FDC utility function: compute number of bytes to be moved
     ; Arguments:
-    ; - $ffb8: bytes per sector "shift factor". If = 0, FM encoding is used. If != 0, MFM encoding is used
-    ; - $ffba: lower nibble, manually add some more bps (TODO)
-    ; - $ffbb: sector number (only bit 7 is considered)
+    ; - $ffb8: sector size factor (bps = 0x80 << ssf)
+    ;          Note: if = 0, FM encoding is used. If != 0, MFM encoding is used
+    ; - $ffba: sector burst (bits 3:0)
+    ; - $ffbb: sector burst enabled (bit 7), valid only for ssf = 3
     ; Return:
-    ; - de: bytes per sector
+    ; - de: bytes to be processed
+    ;
+    ; | ssf  | sbe = 0 |     sbe = 1      |
+    ; | ---- | ------- | ---------------- |
+    ; |  0   |       128 + 256 * sb       |
+    ; |  1   |       256 + 256 * sb       |
+    ; |  2   |       256 + 256 * sb       |
+    ; |  3   |   1024  | 1024 + 1024 * sb |
 fdc_compute_bps_c2b7:
     ld      e,$00                           ;[c2b7] e = 0
-    ld      a,($ffb8)                       ;[c2b9] load bytes per sector
+    ld      a,($ffb8)                       ;[c2b9] load ssf, valid values are 0 to 3
     cp      $03                             ;[c2bc]
-    jr      nz,label_c2d4                   ;[c2be] if 1024 bytes per sector (*$ffb8 == 3)...
-    ld      d,$04                           ;[c2c0] ... d = 4
-    ld      a,($ffbb)                       ;[c2c2] load sector number
+    jr      nz,label_c2d4                   ;[c2be] handle separately ssf != 3
+    ld      d,$04                           ;[c2c0] if ssf = 3 (bps = 1024) d = 4
+    ld      a,($ffbb)                       ;[c2c2] load sector burst enabled bit
     bit     7,a                             ;[c2c5]
-    jr      z,label_c2e2                    ;[c2c7] if MSb is not set, return
+    jr      z,label_c2e2                    ;[c2c7] if sbe = 0, just return (e = 0 (256), d = 4 --> 1024)
     ld      a,($ffba)                       ;[c2c9] load (lower nibble of) operation command
     and     $0f                             ;[c2cc]
     rlca                                    ;[c2ce]
     rlca                                    ;[c2cf]
     add     d                               ;[c2d0]
-    ld      d,a                             ;[c2d1] d = ((*$ffba & 0xf) + 1) * 4
-    jr      label_c2e2                      ;[c2d2] return, d as above, e = 0
+    ld      d,a                             ;[c2d1] return: d = (sb + 1) * 4
+    jr      label_c2e2                      ;[c2d2] e = 0 --> 1024 + 1024 * sb
+
 label_c2d4:                                 ;       if bytes per sector != 1024...
     or      a                               ;[c2d4]
-    jr      nz,label_c2d9                   ;[c2d5] if bytes per sector != 128 (*$ffb8 = 0)...
-    ld      e,$80                           ;[c2d7] e = 128
+    jr      nz,label_c2d9                   ;[c2d5]
+    ld      e,$80                           ;[c2d7] if ssf = 0, e = 128
 label_c2d9:
-    ld      a,($ffba)                       ;[c2d9] load (lower nibble of) operation command
+    ld      a,($ffba)                       ;[c2d9] load sector burst
     and     $0f                             ;[c2dc]
     ld      d,$01                           ;[c2de]
     add     d                               ;[c2e0]
-    ld      d,a                             ;[c2e1] d = (*$ffba & 0xf) + 1
+    ld      d,a                             ;[c2e1] d = sb + 1
 label_c2e2:
     ret                                     ;[c2e2]
 
     ; Format floppy disk
     ; Arguments are stored in $ffb8-$ffbf, as explained in caller fdc_rwfs_c19d
+    ; During format, ID fields are supplied to FDC, one for each sector in track.
+    ; Each ID field is 4 bytes long.
 fdc_format_c2e3:
     call    fdc_seek_c3a9                   ;[c2e3] move to desired track
     cp      $ff                             ;[c2e6] if not able to locate track...
-    ret     z                               ;[c2e8] ...return
-    ld      b,$14                           ;[c2e9] b default value is 20
-    ld      a,($ffb8)                       ;[c2eb] a is bytes per sector
+    ret     z                               ;[c2e8] ...return -1
+    ld      b,$14                           ;[c2e9] if ssf=3, 5 sectors per track (5*4=20)
+    ld      a,($ffb8)                       ;[c2eb] load sector size factor
     cp      $03                             ;[c2ee]
     jr      z,label_c2f4                    ;[c2f0] if less than 1024 bytes per sector...
-    ld      b,$40                           ;[c2f2] b = 64
+    ld      b,$40                           ;[c2f2] if ssf<3, 16 sectors per track (16*4=64)
 label_c2f4:
     push    bc                              ;[c2f4]
     call    fdc_wait_busy                   ;[c2f5]
@@ -593,36 +606,36 @@ label_c2f4:
     call    fdc_send_cmd                    ;[c2fa] send "write id" command
     ld      bc,($ffb9)                      ;[c2fd] 1st argument: drive number (c <= *$ffb9)
     call    fdc_send_cmd                    ;[c301]
-    ld      a,($ffb8)                       ;[c304] 2nd argument: bytes per sector "factor"
+    ld      a,($ffb8)                       ;[c304] 2nd argument: sector size factor
     ld      c,a                             ;[c307]
     call    fdc_send_cmd                    ;[c308]
-    ld      c,$05                           ;[c30b] default sectors/track number, 5
-    ld      a,($ffb8)                       ;[c30d] same as before, load formatting encoding in a
+    ld      c,$05                           ;[c30b] if ssf = 3, sectors per track = 5
+    ld      a,($ffb8)                       ;[c30d] laod ssf
     cp      $03                             ;[c310]
     jr      z,label_c316                    ;[c312]
-    ld      c,$10                           ;[c314] if *$ffb8 != 3, sectors/track = 16
+    ld      c,$10                           ;[c314] if *ssf != 3, sectors per track = 16
 label_c316:
-    call    fdc_send_cmd                    ;[c316] 3rd argument: sectors/track number
+    call    fdc_send_cmd                    ;[c316] 3rd argument: sectors per track
     ld      c,$28                           ;[c319] gap length is 40
     call    fdc_send_cmd                    ;[c31b] 4rd argument: gap3 length
     di                                      ;[c31e] disable interrupts
     ld      c,$e5                           ;[c31f]
-    call    fdc_send_cmd                    ;[c321] 5th argument: filler byte value
-    pop     bc                              ;[c324] reload bytes per sector in b
-    ld      c,$c1                           ;[c325]
-    ld      hl,($ffbd)                      ;[c327]
+    call    fdc_send_cmd                    ;[c321] 5th argument: filler byte value = 0xe5
+    pop     bc                              ;[c324]
+    ld      c,$c1                           ;[c325] prepare IO address in c
+    ld      hl,($ffbd)                      ;[c327] prepare buffer address in hl
 label_c32a:
-    in      a,($82)                         ;[c32a] read PORTC
+    in      a,($82)                         ;[c32a] wait until FDC is ready (INT = 1)
     bit     2,a                             ;[c32c]
     jr      z,label_c32a                    ;[c32e]
     in      a,($c0)                         ;[c330] read main status register
     bit     5,a                             ;[c332] check if still in execution phase...
     jr      z,label_c33a                    ;[c334] ...if not, end formatting
-    outi                                    ;[c336] TODO why do I have to write something if i'm formatting?
+    outi                                    ;[c336] write sector IDs
     jr      nz,label_c32a                   ;[c338]
 label_c33a:
-    out     ($dc),a                         ;[c33a]
-    ei                                      ;[c33c]
+    out     ($dc),a                         ;[c33a] request Terminal Count to FDC
+    ei                                      ;[c33c] enable interrupts again
     call    fdc_rw_status_c3f4              ;[c33d] command response, put it in $ffc0-$ffc6
     ld      a,($ffc0)                       ;[c340] fetch status (ST0)
     and     $c0                             ;[c343] mask Interrupt Code bits (as in fdc_sis routine)...
@@ -713,9 +726,9 @@ label_c3d0:
     ;     - 01 if previous operation was not successful (readfail);
     ;     - other cases are treated as successful.
 fdc_sis_c3d2:
-    in      a,($82)                         ;[c3d2] read PORTC
+    in      a,($82)                         ;[c3d2] wait until FDC is ready (INT = 1)
     bit     2,a                             ;[c3d4]
-    jp      z,fdc_sis_c3d2                  ;[c3d6] busy wait until PORTC[2] != 0
+    jp      z,fdc_sis_c3d2                  ;[c3d6]
     call    fdc_wait_busy                   ;[c3d9]
     call    fdc_wait_rqm_wr                 ;[c3dc] wait until FDC is ready for write request
     ld      a,$08                           ;[c3df] send "Sense Interrupt Status" command
@@ -785,28 +798,30 @@ fdc_wait_busy:
     jr      nz,fdc_wait_busy                ;[c420]
     ret                                     ;[c422]
 
-    ; FDC utility routine: IDEA reset head position at least one time per drive since the computer was turned on
+    ; FDC drive initialization
+    ; Reset head position at least one time per drive since the computer was
+    ; turned on.
     ; Arguments:
-    ; - c: drive number from rwfs routine
+    ; - c: drive number
 fdc_initialize_drive_c423:
     ld      b,$01                           ;[c423]
     ld      a,c                             ;[c425]
     and     $03                             ;[c426] mask drive number only
     or      a                               ;[c428]
-    jr      z,label_c430                    ;[c429] if drive is != 0 (not drive A)...
+    jr      z,label_c430                    ;[c429]
 label_c42b:
     rlc     b                               ;[c42b] at the end of the cycle...
     dec     a                               ;[c42d] ... b = 1 << (drive number)
     jr      nz,label_c42b                   ;[c42e]
 label_c430:
-    ld      a,($ffc7)                       ;[c430] idea: *ffc7 = mask of the accessed drives
+    ld      a,($ffc7)                       ;[c430]
     ld      c,a                             ;[c433]
-    and     b                               ;[c434]
-    ret     nz                              ;[c435] return if rwfs is trying to access an already "initialized" drive
+    and     b                               ;[c434] if this drive was already initialized...
+    ret     nz                              ;[c435] ...return doing nothing
     ld      a,c                             ;[c436]
     or      b                               ;[c437] else, mark this drive as initialized...
     ld      ($ffc7),a                       ;[c438] ...store this information in ram...
-    call    fdc_track0_c391                 ;[c43b] ...and perform initialization (aka moving head to track 0)
+    call    fdc_track0_c391                 ;[c43b] ...and perform initialization (aka move head to track 0)
     ret                                     ;[c43e]
 
     ; SUBROUTINE C43F
@@ -814,7 +829,7 @@ label_c430:
     ; Configure the FDC IC with:
     ; - SRT = 6 (Step Rate Time = 6ms)
     ; - HUT = F (Head Unload Time = 240ms)
-    ; - HLT = A (Head Load Time = 22ms)
+    ; - HLT = D (Head Load Time = 26ms)
     ; - ND = 1 (DMA mode disabled)
 fdc_init:
     push    bc                              ;[c43f]
